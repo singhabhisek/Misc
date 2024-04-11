@@ -1,0 +1,12 @@
+{
+  "applications": [
+    {
+      "name": "Application 1",
+      "file": "static/config/config.json"
+    },
+    {
+      "name": "Application 2",
+      "file": "static/config/SecondAPIList.json"
+    }
+  ]
+}

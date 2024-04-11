@@ -1,0 +1,120 @@
+#sidebar {
+			 height: 100%;
+			 width: 250px;
+			 position: fixed;
+			 top: 50;
+			 left: 0;
+			 background-color: #5a6370;
+			 color: white;
+			 padding-top: 30px;
+			 padding-left: 10px;
+			 padding-right: 10px;
+         }
+         #sidebar .app-logo {
+			 text-align: center;
+			 margin-bottom: 20px;
+         }
+         #sidebar .app-name {
+			 text-align: center;
+			 margin-bottom: 20px;
+			 font-size: 24px;
+         }
+         #sidebar .welcome-user {
+			 text-align: center;
+			 margin-bottom: 20px;
+			 font-size: 18px;
+         }
+         #main {
+			 margin-left: 250px;
+			 padding: 20px;
+         }
+         .summary-container {
+			 display: flex;
+			 justify-content: space-between; /* Distribute items evenly */
+			 padding: 10px; /* Add padding */
+         }
+         #count-summary div {
+			 flex: 1; /* Each div takes up equal space */
+			 padding: 0 10px; /* Add padding between columns */
+			 text-align: left; /* Align text to the left */
+         }
+
+         .panel {
+				border: 1px solid #ddd; /* Border color */
+				 border-radius: 10px; /* Rounded corners */
+				 box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05); /* Box shadow */
+				 padding: 10px; /* Padding inside the panel */
+			}
+
+			.panel p {
+				font-weight: bold;
+				margin-bottom: 10px;
+			}
+         #banner {
+			 display: flex;
+			 height: 80px;
+			 background-color: #1e0440;
+			 justify-content: space-between;
+			 color:white;
+			 align-items: center;
+			 padding: 10px;
+         }
+         .app-logo {
+         	padding-left: 10px;
+         }
+         .app-name {
+         	text-align: center;
+         }
+         .welcome-user {
+         	padding-right: 10px;
+         }
+         #service-table td input[type="checkbox"] {
+			 margin: 0 auto;
+			 /* Align checkbox horizontally */
+			 display: block;
+			 /* Ensure checkbox is centered */
+			 width: fit-content;
+			 /* Adjust width based on content */
+         }
+         #service-table th input[type="checkbox"] {
+			 margin: 0 auto;
+			 /* Align checkbox horizontally */
+			 display: block;
+			 /* Ensure checkbox is centered */
+			 width: fit-content;
+			 /* Adjust width based on content */
+         }
+<!--         .panel.panel-default {-->
+<!--			 border: 1px solid #ddd; /* Border color */-->
+<!--			 border-radius: 10px; /* Rounded corners */-->
+<!--			 box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05); /* Box shadow */-->
+<!--			 padding: 20px; /* Padding inside the panel */-->
+<!--         }-->
+         .btn-group.pull-right {
+         	float: right;
+         }
+         #loader-overlay {
+			 position: fixed;
+			 top: 0;
+			 left: 0;
+			 width: 100%;
+			 height: 100%;
+			 background-color: rgba(255, 255, 255, 0.7); /* semi-transparent white background */
+			 display: none; /* initially hidden */
+         }
+         .loader {
+			 border: 6px solid #f3f3f3; /* Light grey */
+			 border-top: 6px solid #3498db; /* Blue */
+			 border-radius: 50%;
+			 width: 50px;
+			 height: 50px;
+			 animation: spin 2s linear infinite;
+			 position: absolute;
+			 top: 50%;
+			 left: 50%;
+			 transform: translate(-50%, -50%);
+         }
+         @keyframes spin {
+			 0% { transform: rotate(0deg); }
+			 100% { transform: rotate(360deg); }
+         }

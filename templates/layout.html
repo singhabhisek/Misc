@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Management Tool</title>
+    <!-- Include any necessary CSS and JavaScript files -->
+
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap4.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.dataTables.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha384-u67zL2+N1wCq2HDSndjvabR2vUPjtw5zN3W0dCdbMheRm6r4t5WS4F7XdQxo3+oK" crossorigin="anonymous">
+
+    <!-- Add any additional styling or scripts -->
+    <style>
+        #banner {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 80px;
+            background-color: #1e0440;
+            justify-content: space-between;
+            color:white;
+            align-items: center;
+            padding: 10px;
+            z-index: 999; /* Ensure sidebar stays above other content */
+        }
+        .app-logo {
+            padding-left: 10px;
+        }
+        .app-name {
+            text-align: center;
+        }
+        .welcome-user {
+            padding-right: 10px;
+        }
+        #sidebar {
+            height: calc(100vh - 80px); /* Subtract height of banner */
+            width: 15%;
+            position: fixed;
+            top: 80px; /* Height of banner */
+            left: 0;
+            background-color: #5a6370;
+            color: white;
+            padding-top: 30px;
+            padding-left: 10px;
+            padding-right: 10px;
+            z-index: 999; /* Ensure sidebar stays above other content */
+        }
+        #main {
+            margin-left: 250px; /* Width of the sidebar */
+            margin-top: 80px; /* Height of the banner */
+            width: calc(100% - 250px); /* Adjust based on sidebar width */
+            box-sizing: border-box; /* Include padding and border in width calculation */
+            overflow-x: hidden; /* Hide horizontal scrollbar */
+        }
+        .content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-body {
+            flex-grow: 1; /* Allow content body to grow to fill remaining space */
+            overflow-y: auto; /* Enable vertical scrollbar for content body */
+        }
+
+        /* Sidebar menu items */
+        .sidebar-menu {
+            padding: 0;
+        }
+
+        /* Sidebar items */
+        .sidebar-item {
+            padding: 10px;
+        }
+
+        /* Sidebar links */
+        .sidebar-link {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar-link:hover {
+            background-color: #333; /* Change background color on hover */
+        }
+
+        /* Icons */
+        .sidebar-link i {
+            margin-right: 10px;
+        }
+
+        /* CSS for icons */
+        .home-icon {
+            background-image: url('home-icon.png'); /* URL to your home icon */
+        }
+
+        .upload-icon {
+            background-image: url('upload-icon.png'); /* URL to your upload icon */
+        }
+
+        /* Common styles for sidebar icons */
+        .sidebar-icon {
+            display: inline-block;
+            width: 20px; /* Adjust the width of the icon */
+            height: 20px; /* Adjust the height of the icon */
+            background-size: cover;
+            margin-right: 10px; /* Spacing between icon and text */
+        }
+    </style>
+</head>
+<body>
+<div id="banner">
+    <!-- Banner content goes here -->
+    <div class="app-logo">
+        <!-- Logo goes here -->
+        <img src="static/images/truist.png" style="width:200px" alt="Logo">
+    </div>
+    <div class="app-name">
+        <!-- Application name goes here -->
+        <h1 style="font-size: 36px;">AppHealthWatch - <span style="font-size: 24px;">API Health Check Utility</span></h1>
+    </div>
+    <div class="welcome-user">
+        <!-- Welcome message with username goes here -->Welcome User
+    </div>
+</div>
+<div id="sidebar">
+    <div class="sidebar-menu">
+        <!-- Sidebar menu items go here -->
+        <div class="sidebar-item">
+            <a href="/" class="sidebar-link">
+                <span class="sidebar-icon home-icon"></span> Home
+            </a>
+        </div>
+        <div class="sidebar-item">
+            <a href="/upload" class="sidebar-link">
+                <span class="sidebar-icon upload-icon"></span> Upload
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div id="main">
+    <div class="content">
+        <div class="content-body">
+            <!-- Your main content goes here -->
+            {% block content %}
+            {% endblock %}
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
