@@ -6,7 +6,7 @@
       "useCase": "Description of Use Case for ValidateUser",
       "successCriteria": "user",
       "endpoint": "https://reqres.in/api/users/2",
-      "sampleRequestLocation": "",
+      "sampleRequestLocation": "C:\\Users\\AS\\PycharmProjects\\RESTAPI\\SampleAPI\\static\\sample.xml",
       "additionalHeaders": {
         "clientId": "",
         "secret": "",
@@ -20,14 +20,27 @@
       "useCase": "Description of Use Case for AddProduct",
       "successCriteria": "product",
       "endpoint": "https://reqres.in/api/users/3",
-      "sampleRequestLocation": "",
+      "sampleRequestLocation": "C:\\Users\\AS\\PycharmProjects\\RESTAPI\\SampleAPI\\req.json",
       "headers": {
-        "clientId": "",
-        "token": "",
-        "Header3": "",
-        "Header4": ""
+        "password": "sdfsdfsd",
+        "token": "dfsfdsdf",
+        "Header3": "sdfdsf"
       }
 
+    },
+    {
+      "serviceName": "RiskManagement2",
+      "operationName": "AddRisk32",
+      "useCase": "Description of Use Case for AddProduct",
+      "successCriteria": "product",
+      "endpoint": "https://reqresa.in/api/users/4",
+      "sampleRequestLocation": "aa",
+      "headers": {
+        "clientId": "kld",
+        "token": "sdffsd",
+        "Header3": "dsf",
+        "Header4": "sdsf"
+      }
     }
   ]
 }

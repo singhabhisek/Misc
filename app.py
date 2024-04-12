@@ -130,16 +130,40 @@ def execute():
                 method = 'GET' if entry.get('sampleRequestLocation') == '' else 'POST'
                 headers = entry.get('headers', {})
                 request_executed = False
+                processed_requests = set()
+                # Check if the service name and operation name combination has been processed
+                service_operation_key = (entry['serviceName'], entry.get('operationName', ''))
+
                 for i in range(iteration_count):  # Perform iterations
                     try:
                         raw_request = {'method': method, 'url': entry['endpoint'], 'headers': headers}
                         if method == 'POST':
+
+
                             if entry['sampleRequestLocation'] != '':
                                 with open(entry['sampleRequestLocation'], 'r') as f:
                                     sample_request_content = f.read()
-                                raw_request['data'] = sample_request_content
-                                raw_request['json'] = json.loads(sample_request_content)
-                        raw_requests.append(raw_request)
+                                try:
+                                    xml_root = ET.fromstring(sample_request_content)
+                                    # Convert XML object to string for display
+                                    xml_string = ET.tostring(xml_root, encoding='unicode')
+                                    raw_request['data'] = xml_string
+                                    raw_request['xml'] = xml_string
+                                    raw_request['headers']['Content-Type'] = 'application/xml'
+
+                                except ET.ParseError:
+                                    # If parsing as XML fails, consider it as JSON
+                                    try:
+                                        json_content = json.loads(sample_request_content)
+                                        raw_request['data'] = json_content
+                                        raw_request['json'] = json_content
+                                        raw_request['headers']['Content-Type'] = 'application/json'
+                                    except ValueError:
+                                        return jsonify(
+                                            {'status': 'error', 'message': 'Invalid sample request content!'})
+                        if service_operation_key not in processed_requests:
+                            raw_requests.append(raw_request)
+                            processed_requests.add(service_operation_key)  # Mark as processed
 
                         if not request_executed:
                             if method == 'GET':
@@ -201,16 +225,34 @@ def execute():
                         status_descriptions.append(f'{response.status_code} - {response.reason}')
                 break
 
+        # Now, serialize the raw requests to JSON
+        serialized_raw_requests = []
+        for requestw in raw_requests:
+            print(requestw)
+            serialized_request = {
+                'method': requestw['method'],
+                'url': requestw['url'],
+                'headers': requestw['headers']
+            }
+            # Include data if present and not XML
+            if 'data' in requestw:
+                if 'xml' in requestw:
+                    serialized_request['data'] = requestw['xml']
+                else:
+                    serialized_request['data'] = requestw['data']
+            serialized_raw_requests.append(serialized_request)
+
+        # Include serialized raw requests in the result
         result['responses'][service] = {
             'responses': responses,
             'passed_count': passed_count,
             'total_iterations': iteration_count,
             'overall_status': overall_status,
-            'status_descriptions': status_descriptions,  # Include response codes
-            'raw_requests': raw_requests  # Include raw requests
+            'status_descriptions': status_descriptions,
+            'raw_requests': serialized_raw_requests
         }
 
-    # print(result)
+    print(result)
     return jsonify(result)
 
 if __name__ == "__main__":

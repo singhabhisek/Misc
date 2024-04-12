@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<request>
+    <user>
+        <username>johndoe</username>
+        <password>password123</password>
+    </user>
+    <data>
+        <name>John Doe</name>
+        <email>john.doe@example.com</email>
+        <age>30</age>
+    </data>
+</request>
