@@ -40,7 +40,7 @@ def backup_config():
     timestamp = datetime.now().strftime("%Y%m%d")
     backup_path = os.path.join(UPLOAD_FOLDER, f'config_backup_{timestamp}.json')
     try:
-        #os.rename(original_path, backup_path)
+        os.rename(original_path, backup_path)
         return True
     except Exception as e:
         print(f"Error while creating backup: {e}")
@@ -54,8 +54,8 @@ def upload():
 
     else:
         if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
+            return jsonify({'status': 'error', 'message': ' No config file was provided '}), 500
+            # return redirect(request.url)
         file = request.files['file']
         if file.filename == '':
             flash('No selected file')
@@ -64,20 +64,21 @@ def upload():
             try:
                 data = json.loads(file.read())
             except json.JSONDecodeError as e:
-                return jsonify({'status': 'error', 'message': 'Invalid JSON format'})
+                return jsonify({'status': 'error', 'message': 'Invalid JSON format'}), 500
             if validate_json(data):
-                filename = 'config11.json'
+                backup_successful = backup_config()
+                if not backup_successful:
+                    return jsonify({'status': 'error', 'message': 'Error creating backup'}), 500
+                filename = 'config.json'
                 file.seek(0)  # Reset file pointer to start before saving
                 file.save(os.path.join(UPLOAD_FOLDER, filename))
-                # backup_successful = backup_config()
-                # if not backup_successful:
-                #     return jsonify({'status': 'error', 'message': 'Error creating backup'})
-                return jsonify({'status': 'success', 'message': 'File uploaded successfully'})
+
+                return jsonify({'status': 'success', 'message': 'File uploaded successfully'}), 200
             else:
                 return jsonify({'status': 'error',
-                                'message': 'Invalid JSON structure. Missing one or more required keys in "entries".'})
+                                'message': 'Invalid JSON structure. Missing one or more required keys in "entries".'}), 500
         else:
-            return jsonify({'status': 'error', 'message': 'Invalid file format. Only JSON files are allowed.'})
+            return jsonify({'status': 'error', 'message': 'Invalid file format. Only JSON files are allowed.'}), 500
     return render_template('upload_config.html')
 
 
@@ -252,7 +253,7 @@ def execute():
             'raw_requests': serialized_raw_requests
         }
 
-    print(result)
+    # print(result)
     return jsonify(result)
 
 if __name__ == "__main__":

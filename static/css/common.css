@@ -1,3 +1,7 @@
+body, table, label, input[type="text"], .app-logo img, .app-name h1, .app-name span, .welcome-user {
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
 #sidebar {
 			 height: 100%;
 			 width: 250px;
@@ -118,35 +122,98 @@
 			 0% { transform: rotate(0deg); }
 			 100% { transform: rotate(360deg); }
          }
+#main {
+            margin-left: 250px; /* Width of the sidebar */
+            margin-top: 80px; /* Height of the banner */
+            width: calc(100% - 250px); /* Adjust based on sidebar width */
+            box-sizing: border-box; /* Include padding and border in width calculation */
+            overflow-x: hidden; /* Hide horizontal scrollbar */
+        }
+        .content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-body {
+            flex-grow: 1; /* Allow content body to grow to fill remaining space */
+            overflow-y: auto; /* Enable vertical scrollbar for content body */
+        }
 
-    #confirm-box {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-    z-index: 9999;
-}
+        /* Sidebar menu items */
+        .sidebar-menu {
+            padding: 0;
+        }
 
-.confirm-content {
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-}
+        /* Sidebar items */
+        .sidebar-item {
+            padding: 10px;
+        }
 
-.hidden {
-    display: none;
-}
+        /* Sidebar links */
+        .sidebar-link {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
 
-.success {
-    border: 2px solid #28a745; /* Success color */
-}
+        .sidebar-link:hover {
+            background-color: #333; /* Change background color on hover */
+        }
 
-.error {
-    border: 2px solid #dc3545; /* Error color */
-}
+        /* Icons */
+        .sidebar-link i {
+            margin-right: 10px;
+        }
+
+        /* CSS for icons */
+        .home-icon {
+            background-image: url('../images/green.png'); /* URL to your home icon */
+        }
+
+        .upload-icon {
+            background-image: url('upload-icon.png'); /* URL to your upload icon */
+        }
+
+        /* Common styles for sidebar icons */
+        .sidebar-icon {
+            display: inline-block;
+            width: 20px; /* Adjust the width of the icon */
+            height: 20px; /* Adjust the height of the icon */
+            background-size: cover;
+            margin-right: 10px; /* Spacing between icon and text */
+        }
+ #confirm-box {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 300px;
+        height: 150px;
+        background-color: #ffffff;
+        border: 2px solid #cccccc;
+        border-radius: 5px;
+        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+    }
+
+    #confirm-box.hidden {
+        display: none;
+    }
+
+    #confirm-box.success {
+        border-color: #4CAF50;
+    }
+
+    #confirm-box.error {
+        border-color: #f44336;
+    }
+
+    .confirm-message {
+        text-align: center;
+        padding: 20px;
+    }
