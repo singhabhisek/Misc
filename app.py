@@ -24,31 +24,44 @@ def index():
 UPLOAD_FOLDER = 'static/config'
 ALLOWED_EXTENSIONS = {'json'}
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def validate_json(data):
-    required_keys = ['serviceName', 'operationName', 'useCase', 'successCriteria', 'endpoint', 'headers']
+    required_keys = ['serviceName', 'operationName', 'useCase', 'successCriteria', 'endpoint', 'headers','sampleRequestLocation']
+    entries_with_missing_keys = {}
+
     for entry in data['entries']:
-        for key in required_keys:
-            if key not in entry:
-                return False
-    return True
+        missing_keys = [key for key in required_keys if key not in entry]
+        if missing_keys:
+            entries_with_missing_keys[entry.get('operationName', 'UnknownOperation')] = missing_keys
 
-def backup_config():
-    original_path = os.path.join(UPLOAD_FOLDER, 'config.json')
-    timestamp = datetime.now().strftime("%Y%m%d")
-    backup_path = os.path.join(UPLOAD_FOLDER, f'config_backup_{timestamp}.json')
-    try:
-        os.rename(original_path, backup_path)
+    if entries_with_missing_keys:
+        return False, entries_with_missing_keys
+    else:
+        return True, {}
+
+def backup_config(file_path):
+    original_path = file_path #os.path.join(UPLOAD_FOLDER, 'config.json')
+    filename_without_extension = os.path.splitext(os.path.basename(file_path))[0]
+
+    timestamp = datetime.now().strftime("%Y%m%d%S")
+    backup_path = os.path.join(UPLOAD_FOLDER, f'backup/{filename_without_extension}_{timestamp}.json')
+    if os.path.exists(original_path):
+        try:
+            os.rename(original_path, backup_path)
+            return True
+        except Exception as e:
+            print(f"Error while creating backup: {e}")
+            return False
+    else:
         return True
-    except Exception as e:
-        print(f"Error while creating backup: {e}")
-        return False
-
 
 @app.route('/upload',  methods=['GET', 'POST'])
 def upload():
+    APP_CONFIG_FILE = 'static/config/app_config.json'
+
     if request.method == 'GET':
         return render_template('upload_config.html')
 
@@ -57,6 +70,11 @@ def upload():
             return jsonify({'status': 'error', 'message': ' No config file was provided '}), 500
             # return redirect(request.url)
         file = request.files['file']
+        print(file)
+        app_name = request.form['appName']
+
+
+
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
@@ -65,18 +83,44 @@ def upload():
                 data = json.loads(file.read())
             except json.JSONDecodeError as e:
                 return jsonify({'status': 'error', 'message': 'Invalid JSON format'}), 500
-            if validate_json(data):
-                backup_successful = backup_config()
+            is_valid_json, missing_keys = validate_json(data)
+            if is_valid_json:
+
+                file_path = os.path.join('static/config',
+                                         f"{app_name.lower().replace(' ', '_')}_config_file.json").replace('\\',
+                                                                                                           '/')
+                # Update app_config.json
+                with open(APP_CONFIG_FILE, 'r+') as f:
+                    data = json.load(f)
+                    # Check if app_name already exists
+                    existing_apps = [app['name'] for app in data['applications']]
+                    if app_name not in existing_apps:
+                       # return jsonify({'status': 'error', 'message': 'Application name already exists'}), 500
+                        data['applications'].append({
+                            'name': app_name,
+                            'file': file_path
+                        })
+                        f.seek(0)
+                        json.dump(data, f, indent=4)
+
+                backup_successful = backup_config(file_path)
                 if not backup_successful:
                     return jsonify({'status': 'error', 'message': 'Error creating backup'}), 500
                 filename = 'config.json'
                 file.seek(0)  # Reset file pointer to start before saving
-                file.save(os.path.join(UPLOAD_FOLDER, filename))
+
+
+
+                # file.save(os.path.join(UPLOAD_FOLDER, filename))
+                file.save(file_path)
+                print(file_path)
 
                 return jsonify({'status': 'success', 'message': 'File uploaded successfully'}), 200
             else:
-                return jsonify({'status': 'error',
-                                'message': 'Invalid JSON structure. Missing one or more required keys in "entries".'}), 500
+                error_message = f'Invalid JSON structure. Missing keys for operations: {missing_keys}'
+                return jsonify({'status': 'error', 'message': error_message}), 500
+                # return jsonify({'status': 'error',
+                #                 'message': 'Invalid JSON structure. Missing one or more required keys in "entries".'}), 500
         else:
             return jsonify({'status': 'error', 'message': 'Invalid file format. Only JSON files are allowed.'}), 500
     return render_template('upload_config.html')
