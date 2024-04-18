@@ -19,43 +19,6 @@
 <link rel="stylesheet" type="text/css"
           href="static/css/common.css">
 
-    <script>
-
-    // Function to show confirmation box
-    function showConfirmation(message, type) {
-        var confirmBox = $('#confirm-box');
-        var confirmMessage = confirmBox.find('.confirm-message');
-
-        confirmMessage.text(message);
-        confirmBox.removeClass('hidden');
-
-        if (type === 'success') {
-            confirmBox.addClass('success');
-        } else if (type === 'error') {
-            confirmBox.addClass('error');
-        }
-
-        // Hide confirmation box after 1.5 seconds or when clicked
-        setTimeout(function() {
-            hideConfirmation();
-        }, 1500);
-
-        confirmBox.click(function() {
-            hideConfirmation();
-        });
-    }
-
-    // Function to hide confirmation box
-    function hideConfirmation() {
-        var confirmBox = $('#confirm-box');
-
-        confirmBox.addClass('hidden');
-        confirmBox.removeClass('success');
-        confirmBox.removeClass('error');
-    }
-
-    </script>
-
 </head>
 <body>
 <div id="banner">
@@ -175,8 +138,20 @@
     <br>
 </div>
 
-<div id="confirm-box" class="hidden">
-    <div class="confirm-message"></div>
+<div class="container mt-5">
+    <div id="confirm-box" class="hidden">
+        <div class="card">
+            <div class="confirm-header">
+                <h5 class="card-title" id="confirm-header-text"></h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text confirm-message"></p>
+            </div>
+            <div class="card-footer center-button">
+                <button id="ok-button" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
 </div>
 </body>
 

@@ -184,6 +184,25 @@ body, table, label, input[type="text"], .app-logo img, .app-name h1, .app-name s
             background-size: cover;
             margin-right: 10px; /* Spacing between icon and text */
         }
+
+        #confirm-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+        }
+        .card {
+            width: 100%;
+            height: 100%;
+        }
+        .confirm-header {
+            background-color: #e9ecef;
+            padding: 10px;
+        }
+        .center-button {
+            text-align: center;
+        }
+
  #confirm-box {
         display: flex;
         justify-content: center;
@@ -192,8 +211,8 @@ body, table, label, input[type="text"], .app-logo img, .app-name h1, .app-name s
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 300px;
-        height: 150px;
+        width: 500px;
+        height: 250px;
         background-color: #ffffff;
         border: 2px solid #cccccc;
         border-radius: 5px;

@@ -1,12 +1,16 @@
 {
-  "applications": [
-    {
-      "name": "Application 1",
-      "file": "static/config/config.json"
-    },
-    {
-      "name": "Application 2",
-      "file": "static/config/SecondAPIList.json"
-    }
-  ]
+    "applications": [
+        {
+            "name": "TestApplication",
+            "file": "static/config/testapplication_config_file.json"
+        },
+        {
+            "name": "Mulesoft",
+            "file": "static/config/mulesoft_config_file.json"
+        },
+        {
+            "name": "TestApplicationss1",
+            "file": "static/config/testapplicationss1_config_file.json"
+        }
+    ]
 }

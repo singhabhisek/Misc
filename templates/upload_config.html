@@ -7,9 +7,48 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
-     <script src="static/js/common.js"></script>
-<link rel="stylesheet" type="text/css"
+<!--     <script src="static/js/common.js"></script>-->
+    <link rel="stylesheet" type="text/css"
           href="static/css/common.css">
+
+
+
+    <style>
+      /* Dark style for dropdown */
+        .custom-dropdown {
+            position: relative;
+        }
+
+        .dropdown-list {
+            position: absolute;
+            top: 100%; /* Position it below the input */
+            left: 0;
+            z-index: 1000; /* Ensure it appears above other elements */
+            width: 100%;
+            max-height: 200px; /* Set a max height for overflow */
+            overflow-y: auto;
+            background-color: white; /* Dark background */
+            border: 1px solid #343a40; /* Matching border */
+            border-radius: 0.25rem;
+            margin-top: -1px; /* To remove the border overlap */
+            padding-left: 0; /* Remove left padding */
+            display:none;
+        }
+
+        .dropdown-list li {
+            list-style-type: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: black /* White text */
+            width: 100%; /* Make the li full width */
+        }
+
+        .dropdown-list li:hover {
+            background-color: #007bff; /* Blue background on hover */
+            color: #ffffff; /* White text on hover */
+        }
+
+    </style>
 </head>
 <body>
 
@@ -52,9 +91,15 @@
         <h1 class="mt-5">Upload Configuration File</h1>
 
         <form id="upload-form" class="mt-3">
+            <!-- Add a container for the dropdown and input field -->
             <div class="form-group">
-                <label for="appName">Application Name:</label>
-                <input type="text" class="form-control" id="appName" name="appName" required>
+<!--               <label for="appName">Application Name:</label>-->
+                <div class="custom-dropdown">
+                    <input type="text" class="form-control" id="appNameInput" autocomplete="off" placeholder="Select or type an application name">
+                    <ul id="appNameList" class="dropdown-list">
+                        <!-- Options will be populated dynamically -->
+                    </ul>
+                </div>
             </div>
 
             <div class="custom-file mb-3">
@@ -75,6 +120,12 @@
 
         <div id="confirm-box" class="hidden"></div>
 
+        <hr>
+
+        <h2 class="mt-5">Download Templates</h2>
+        <p><a href="/static/config/template/template.json" download class="btn btn-info">Download Template JSON</a></p>
+        <p><a href="#" id="downloadJson" class="btn btn-info" download>Download Most Recent JSON</a></p>
+    </div>
         <!-- Confirmation Modal -->
         <div class="modal fade" id="confirmationModal" tabindex="-1" role="dialog" aria-labelledby="confirmationModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" role="document">
@@ -99,12 +150,94 @@
     </div>
 
     <script>
+
+    // Function to show confirmation box
+    function showConfirmation(message, type) {
+        var modal = $('#confirmationModal');
+        var modalTitle = modal.find('.modal-title');
+
+        // Set modal heading based on type
+        modalTitle.text(type.charAt(0).toUpperCase() + type.slice(1));
+
+        $('#confirmationMessage').text(message);
+        modal.modal('show');
+
+        $('#confirmButton').on('click', function() {
+            // Hide the modal
+            $('#confirmationModal').modal('hide');
+        });
+    }
+
+
+    document.getElementById('downloadJson').addEventListener('click', function(event) {
+        event.preventDefault(); // Prevent the default link behavior
+
+        // Get the selected application name from the dropdown
+        var appName = document.getElementById('appNameInput').value;
+
+        // Check if appName is empty
+        if (!appName) {
+            showConfirmation('Please provide a valid application name.','Error');
+            return;
+        }
+
+        // Convert the application name to lowercase
+        var lowercaseAppName = appName.toLowerCase().replace(/\s+/g, '_');
+
+        // Construct the download URL
+        var downloadUrl = 'static/config/' + lowercaseAppName + '_config_file.json';
+
+        // Create an anchor element and trigger the download
+        var downloadLink = document.createElement('a');
+        downloadLink.href = downloadUrl;
+        downloadLink.download = lowercaseAppName + '_config_file.json';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    });
+
         $(document).ready(function() {
+            // Populate the predefined application names from app_config.json
+            $.getJSON('static/config/app_config.json', function(data) {
+                var appNames = data.applications.map(function(app) {
+                    return app.name;
+                });
+
+                var appNameInput = $('#appNameInput');
+                var appNameList = $('#appNameList');
+
+                appNames.forEach(function(appName) {
+                    appNameList.append('<li data-value="' + appName.toLowerCase().replace(/\s+/g, '') + '">' + appName + '</li>');
+                });
+
+                // Handle input focus to show/hide the dropdown
+                appNameInput.on('focus', function() {
+                    appNameList.show();
+                }).on('blur', function() {
+                    // Delay hiding to allow click on dropdown list
+                    setTimeout(function() {
+                        appNameList.hide();
+                    }, 200);
+                });
+
+                // Handle dropdown item click
+                appNameList.on('click', 'li', function() {
+                    appNameInput.val($(this).text());
+                    appNameList.hide();
+                });
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error('Error loading app_config.json:', textStatus, errorThrown);
+            });
+
             // Submit form on file upload
             $('#upload-form').submit(function(event) {
-                event.preventDefault();
-                var formData = new FormData($(this)[0]);
+            console.log("Selected App Name:", $('#appNameInput').val());
 
+                event.preventDefault();
+<!--                var formData = new FormData($(this)[0]);-->
+                var formData = new FormData();
+                formData.append('file', $('#file')[0].files[0]);
+                formData.append('appName', $('#appNameInput').val());
                 // Upload file using AJAX
                 $.ajax({
                     url: '/upload',
@@ -150,36 +283,7 @@
             });
         });
 
-        // Function to show confirmation box
-<!--        function showConfirmation(message) {-->
-<!--            // Set the confirmation message-->
-<!--            $('#confirmationMessage').text(message);-->
 
-<!--            // Show the modal-->
-<!--            $('#confirmationModal').modal('show');-->
-
-<!--            // Handle OK button click-->
-<!--            $('#confirmButton').on('click', function() {-->
-<!--                // Hide the modal-->
-<!--                $('#confirmationModal').modal('hide');-->
-<!--            });-->
-<!--        }-->
-
-        function showConfirmation(message, type) {
-            var modal = $('#confirmationModal');
-            var modalTitle = modal.find('.modal-title');
-
-            // Set modal heading based on type
-            modalTitle.text(type.charAt(0).toUpperCase() + type.slice(1));
-
-            $('#confirmationMessage').text(message);
-            modal.modal('show');
-
-                        $('#confirmButton').on('click', function() {
-                        // Hide the modal
-                        $('#confirmationModal').modal('hide');
-                    });
-        }
         });
     </script>
 </body>

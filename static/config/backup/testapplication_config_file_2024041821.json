@@ -1,0 +1,32 @@
+{
+  "entries": [
+    {
+      "serviceName": "AppVerification",
+      "operationName": "ValidateApp",
+      "useCase": "Description of Use Case for ValidateUser",
+      "successCriteria": "user",
+      "endpoint": "https://reqres.in/api/users/2",
+      "sampleRequestLocation": "C:\\Users\\sample.xml",
+      "headers": {
+        "clientId": "",
+        "secret": "",
+        "Header1": "",
+        "Header2": ""
+      }
+    },
+    {
+      "serviceName": "RiskManagement",
+      "operationName": "AddRisk3",
+      "useCase": "Description of Use Case for AddProduct",
+      "successCriteria": "product",
+      "endpoint": "https://reqres.in/api/users/3",
+      "sampleRequestLocation": "req.json",
+      "headers": {
+        "password": "sdfsdfsd",
+        "token": "dfsfdsdf",
+        "Header3": "sdfdsf"
+      }
+
+    }
+  ]
+}

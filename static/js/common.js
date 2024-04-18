@@ -1,6 +1,45 @@
   var selectedApp = '';
     var targetJson = '';
 
+
+// Function to show confirmation box
+function showConfirmation(message, type) {
+    var confirmBox = $('#confirm-box');
+    var confirmHeader = confirmBox.find('#confirm-header-text');
+    var confirmMessage = confirmBox.find('.confirm-message');
+    var okButton = confirmBox.find('#ok-button');
+
+    confirmMessage.text(message);
+    confirmBox.removeClass('hidden');
+
+    if (type === 'success') {
+        confirmHeader.text('Success');
+    } else if (type === 'error') {
+        confirmHeader.text('Error');
+    }
+
+    // Hide confirmation box when OK button is clicked
+    okButton.click(function() {
+        hideConfirmation();
+    });
+
+    confirmBox.click(function() {
+        hideConfirmation();
+    });
+}
+
+// Function to hide confirmation box
+function hideConfirmation() {
+    var confirmBox = $('#confirm-box');
+    var okButton = confirmBox.find('#ok-button');
+
+    confirmBox.addClass('hidden');
+
+    // Remove click event from OK button
+    okButton.off('click');
+}
+
+
     $(document).ready(function() {
         var table = $('#service-table').DataTable({
        drawCallback: function(settings) {
@@ -27,20 +66,73 @@
                 checkbox.prop('checked', isChecked);
             });
         });
+//
+//        // Event handler for individual checkboxes
+//        $(document).on('change', 'input[name="service"]', function() {
+//            // Check if all checkboxes are checked
+//            var allChecked = $('input[name="service"]:checked').length === $('input[name="service"]').length;
+//            // Update the state of the "Select All" checkbox
+//            $('#select-all').prop('checked', allChecked);
+//        });
+//
+//        // Event handler for the "Select All" checkbox
+//        $(document).on('change', '#select-all', function() {
+//            // Update the state of all checkboxes based on the "Select All" checkbox
+//            $('input[name="service"]').prop('checked', $(this).prop('checked'));
+//        });
 
-        // Event handler for individual checkboxes
-        $(document).on('change', 'input[name="service"]', function() {
-            // Check if all checkboxes are checked
-            var allChecked = $('input[name="service"]:checked').length === $('input[name="service"]').length;
-            // Update the state of the "Select All" checkbox
-            $('#select-all').prop('checked', allChecked);
-        });
+// Event handler for "Select All" checkbox
+//$('#select-all').change(function() {
+//    var isChecked = $(this).prop('checked');
+//    $('#service-table').DataTable().rows().every(function() {
+//        var rowNode = this.node();
+//        var checkbox = $(rowNode).find('input[name="service"]');
+//        checkbox.prop('checked', isChecked);
+//    });
 
-        // Event handler for the "Select All" checkbox
-        $(document).on('change', '#select-all', function() {
-            // Update the state of all checkboxes based on the "Select All" checkbox
-            $('input[name="service"]').prop('checked', $(this).prop('checked'));
-        });
+//    // Debug: Count checkboxes on the current page
+//    var currentPageCheckedCount = $('input[name="service"]:checked').length;
+//    console.log('Checked checkboxes on current page:', currentPageCheckedCount);
+//
+//    // Debug: Count total checkboxes in the table
+//    var totalCheckboxCount = $('#service-table').DataTable().rows().count();
+//    console.log('Total checkboxes in the table:', totalCheckboxCount);
+//
+//    // Check if all checkboxes are checked
+//    var allChecked = currentPageCheckedCount === totalCheckboxCount;
+//
+//    // Update the state of the "Select All" checkbox
+//    $('#select-all').prop('checked', allChecked);
+//});
+
+// Event handler for individual checkboxes
+$(document).on('change', 'input[name="service"]', function() {
+    // Debug: Count checkboxes on the current page
+//    var currentPageCheckedCount = $('input[name="service"]:checked').length;
+//    console.log('Checked checkboxes on current page:', currentPageCheckedCount);
+
+// Debug: Count total checkboxes in the table
+    var currentPageCheckedCount = 0;
+    $('#service-table').DataTable().rows().every(function() {
+        var rowNode = this.node();
+        var checkbox = $(rowNode).find('input[name="service"]');
+        if (checkbox.prop('checked')) {
+            currentPageCheckedCount++;
+        }
+    });
+    console.log('Total checked checkboxes in the table:', currentPageCheckedCount);
+
+    // Debug: Count total checkboxes in the table
+    var totalCheckboxCount = $('#service-table').DataTable().rows().count();
+    console.log('Total checkboxes in the table:', totalCheckboxCount);
+
+    // Check if all checkboxes are checked
+    var allChecked = currentPageCheckedCount === totalCheckboxCount;
+
+    // Update the state of the "Select All" checkbox
+    $('#select-all').prop('checked', allChecked);
+});
+
 
         // Event handler for application select change
         $('#app-dropdown').change(function() {
@@ -274,27 +366,22 @@
                     $('#passed-count-value').text(passedCount);
                     $('#failed-at-least-once-count-value').text(failedAtLeastOnceCount);
                     $('#failed-all-count-value').text(failedAllCount);
-                    // Show success message using SweetAlert
-<!--                    Swal.fire({-->
-<!--                        icon: 'success',-->
-<!--                        title: 'Execution completed!',-->
-<!--                        showConfirmButton: false,-->
-<!--                        timer: 1500 // Automatically close after 1.5 seconds-->
-<!--                    });-->
 
 
-                   showConfirmation('Execution Completed', 'success');
+                   console.log(response);
+                   // Check if the response contains an error
+                    if (response.status && response.status === 'error') {
+                        showConfirmation(response.message, 'error');
+                    } else {
+                        showConfirmation('Execution Completed', 'success');
+                    }
 
                 },
                 error: function(xhr, status, error) {
                     $('#loader-overlay').hide(); // Hide the loader overlay on error
-                    // Show error message using SweetAlert
-<!--                    Swal.fire({-->
-<!--                        icon: 'error',-->
-<!--                        title: 'Error!',-->
-<!--                        text: 'Error: ' + xhr.responseText-->
-<!--                    });-->
-                   showConfirmation('An error occurred. Please try again.', 'error');
+
+
+                   showConfirmation('An error occurred. Please try again.' + xhr.responseText, 'error');
 
                 }
             });
