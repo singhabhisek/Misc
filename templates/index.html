@@ -13,6 +13,8 @@
     <link rel="stylesheet" type="text/css"
           href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.dataTables.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+
     <!-- Add any additional styling or scripts -->
 
     <script src="static/js/common.js"></script>
@@ -90,10 +92,26 @@
     </div>
 </div>
 <div id="main">
-    <input type="button" id="export-btn" style="position: relative; float: right; margin-top: 10px; margin-right: 10px;"
-           value="Export to CSV" class="btn btn-secondary">
+<!--    <input type="button" id="export-btn" style="position: relative; float: right; margin-top: 10px; margin-right: 10px;"-->
+<!--           value="Export to CSV" class="btn btn-secondary">-->
 
-    <br>
+<!--    <br>-->
+
+    <div class="btn-group" role="group" style="margin-bottom: 10px;">
+        <input type="button" id="export-btn" value="Export to CSV" class="btn btn-secondary">
+
+        <!-- Checkboxes for including request and response -->
+        <div class="form-check form-check-inline" style="margin-left: 10px;">
+            <input class="form-check-input" type="checkbox" id="include-request" checked>
+            <label class="form-check-label" for="include-request">Include Request</label>
+        </div>
+
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="include-response" checked>
+            <label class="form-check-label" for="include-response">Include Response</label>
+        </div>
+    </div>
+
     <div id="loader-overlay">
         <div class="loader"></div>
     </div>
@@ -155,90 +173,215 @@
 </div>
 </body>
 
+<!--<script>-->
+<!--    document.getElementById('export-btn').addEventListener('click', function() {-->
+<!--        // Define the columns to export-->
+<!--        var selectedColumns = [1, 2]; // Example: Exporting the specified columns-->
+
+<!--        // Get the DataTable instance-->
+<!--        var originalTable = $('#service-table').DataTable();-->
+
+<!--        // Initialize arrays to hold headers and rows-->
+<!--        var rows = [];-->
+<!--        var headers = [];-->
+
+<!--        // Populate headers array with column names-->
+<!--        $('#service-table thead th').each(function(index) {-->
+<!--            if (selectedColumns.includes(index)) {-->
+<!--                headers.push($(this).text());-->
+<!--            }-->
+<!--        });-->
+
+<!--        // Add additional headers for status and response-->
+<!--        headers.push('Overall Status', 'Status Description');-->
+
+<!--        // Checkboxes to include request and response-->
+<!--        var includeRequest = $('#include-request').prop('checked');-->
+<!--        var includeResponse = $('#include-response').prop('checked');-->
+
+<!--        if (includeRequest) headers.push('Request');-->
+<!--        if (includeResponse) headers.push('Response');-->
+
+<!--        // Add the header row to the rows array-->
+<!--        rows.push(headers);-->
+
+<!--        // Iterate over each row in the DataTable-->
+<!--        originalTable.rows().every(function() {-->
+<!--            var rowData = this.data();-->
+<!--            var rowNode = this.node();-->
+<!--            var checkbox = $(rowNode).find('input[type="checkbox"]');-->
+
+<!--            // Check if the row checkbox is checked-->
+<!--            if (checkbox.prop('checked')) {-->
+<!--                var newRow = [];-->
+
+<!--                // Populate the newRow array with data from selected columns-->
+<!--                for (var i = 0; i < selectedColumns.length; i++) {-->
+<!--                    newRow.push(rowData[selectedColumns[i]]);-->
+<!--                }-->
+
+<!--                // Get status and status description data-->
+<!--                var statusCell = $(rowNode).find('td:nth-child(4)');-->
+<!--                var statusDescriptionCell = $(rowNode).find('td:nth-child(5)');-->
+
+<!--                // Add status and status description to the newRow array-->
+<!--                newRow.push(statusCell.text(), statusDescriptionCell.text());-->
+
+<!--                // Add request and response data if the checkboxes are checked-->
+<!--                if (includeRequest) {-->
+<!--                    var requestCell = $(rowNode).find('td:nth-child(9)');-->
+<!--                    newRow.push(requestCell.html());-->
+<!--                }-->
+
+<!--                if (includeResponse) {-->
+<!--                    var responseCell = $(rowNode).find('td:nth-child(8)');-->
+<!--                    newRow.push(responseCell.text());-->
+<!--                }-->
+
+<!--                // Add the newRow to the rows array-->
+<!--                rows.push(newRow);-->
+<!--            }-->
+<!--        });-->
+
+<!--        // Convert the rows array to an Excel workbook-->
+<!--        var worksheet = XLSX.utils.aoa_to_sheet(rows);-->
+<!--        var workbook = XLSX.utils.book_new();-->
+<!--        XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');-->
+
+<!--        // Save the workbook as an .xlsx file-->
+<!--        XLSX.writeFile(workbook, 'service-data.xlsx');-->
+<!--    });-->
+<!--</script>-->
+
+
 
 <!--   script for excel download for selective columns on click of export button-->
 <script>
-
     document.getElementById('export-btn').addEventListener('click', function() {
-          var selectedColumns = [1, 2]; // Example: Exporting the specified columns
-          var originalTable = $('#service-table').DataTable();
-          var rows = [];
-          var headers = [];
+        // Define the columns to export
+        var selectedColumns = [1, 2]; // Example: Exporting the specified columns
 
-          // Get the header text for the selected columns
-          $('#service-table thead th').each(function(index) {
-              if (selectedColumns.includes(index)) {
-                  headers.push($(this).text());
-              }
-          });
+        // Get the DataTable instance
+        var originalTable = $('#service-table').DataTable();
 
-          // Add additional headers for status and response
-          headers.push('Overall Status', 'Status Description',  'Response', 'Request');
+        // Initialize arrays to hold headers and rows
+        var rows = [];
+        var headers = [];
 
-          // Add the header row
-          rows.push(headers);
+        // Populate headers array with column names
+        $('#service-table thead th').each(function(index) {
+            if (selectedColumns.includes(index)) {
+                headers.push($(this).text());
+            }
+        });
 
-          // Iterate over each page
-          originalTable.rows().every(function() {
-              var rowData = this.data();
-              var rowNode = this.node();
-              var checkbox = $(rowNode).find('input[type="checkbox"]');
+        // Add additional headers for status and response
+        headers.push('Overall Status', 'Status Description');
 
-              // Check if the row is selected
-              if (checkbox.prop('checked')) {
-                  var newRow = [];
-                  for (var i = 0; i < selectedColumns.length; i++) {
-                      newRow.push(rowData[selectedColumns[i]]);
-                  }
+        // Checkboxes to include request and response
+        var includeRequest = $('#include-request').prop('checked');
+        var includeResponse = $('#include-response').prop('checked');
 
-                  // Get the corresponding row details
-                  var statusCell = $(rowNode).find('td:nth-child(4)');
-                  var statusDescriptionCell = $(rowNode).find('td:nth-child(5)');
-                  var responseCell = $(rowNode).find('td:nth-child(8)');
-                  var requestCell = $(rowNode).find('td:nth-child(9)');
+        if (includeRequest) headers.push('Request');
+        if (includeResponse) headers.push('Response');
 
-                  // Add status, status description, and response to the row
-                  newRow.push(statusCell.text(), statusDescriptionCell.text(), responseCell.text(),requestCell.html());
-                  rows.push(newRow);
-              }
-          });
+        // Add the header row to the rows array
+        rows.push(headers);
 
-          // Create a new table to hold the selected rows
-          var newTable = document.createElement('table');
-          newTable.style.borderCollapse = 'collapse'; // Collapse borders
-          newTable.style.border = '1px solid #000'; // Add border to table
+        // Iterate over each service in the DataTable
+        var services = {};
+        originalTable.rows().every(function() {
+            var rowData = this.data();
+            var rowNode = this.node();
+            var serviceName = rowData[1]; // Assuming service name is in the second column
 
-          // Iterate over the selected rows
-          for (var i = 0; i < rows.length; i++) {
-              var newRow = document.createElement('tr');
+            // Check if the row checkbox is checked
+            var checkbox = $(rowNode).find('input[type="checkbox"]');
+            if (checkbox.prop('checked')) {
+                if (!services[serviceName]) {
+                    services[serviceName] = {
+                        data: [],
+                        status: '',
+                        statusDescription: '',
+                        request: '',
+                        response: ''
+                    };
+                }
 
-              // Iterate over the selected columns
-              for (var j = 0; j < rows[i].length; j++) {
-                  var originalCell = document.createElement('td');
-                  originalCell.innerText = rows[i][j];
-                  originalCell.style.verticalAlign = 'middle';
-                  originalCell.style.textAlign = 'center';
-                  originalCell.style.border = '1px solid #000'; // Add border to cells
-                  originalCell.setAttribute('mso-number-format', '\@'); // Set column format as text
-                  newRow.appendChild(originalCell);
-              }
+                services[serviceName].data = rowData;
+                services[serviceName].status = $(rowNode).find('td:nth-child(4)').text();
+                services[serviceName].statusDescription = $(rowNode).find('td:nth-child(5)').text();
+                services[serviceName].request = $(rowNode).find('td:nth-child(9)').html();
+                services[serviceName].response = $(rowNode).find('td:nth-child(8)').text();
+            }
+        });
 
-              newTable.appendChild(newRow);
-          }
+        // Populate the rows array with combined service data
+        for (var serviceName in services) {
+            var serviceData = services[serviceName].data;
+            var newRow = [];
 
-          // Convert the new table to HTML string
-          var tableHtml = newTable.outerHTML;
-          var blob = new Blob([tableHtml], {
-              type: 'application/vnd.ms-excel'
-          });
-          var url = window.URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = url;
-          a.download = 'service-data.xls';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-      });
+            for (var i = 0; i < selectedColumns.length; i++) {
+                newRow.push(serviceData[selectedColumns[i]]);
+            }
 
+            newRow.push(
+                services[serviceName].status,
+                services[serviceName].statusDescription
+            );
+
+            if (includeRequest) {
+                newRow.push(services[serviceName].request);
+            }
+
+            if (includeResponse) {
+                newRow.push(services[serviceName].response);
+            }
+
+            rows.push(newRow);
+        }
+
+
+
+        // Create a new table element
+        var newTable = document.createElement('table');
+        newTable.style.borderCollapse = 'collapse'; // Collapse borders
+        newTable.style.border = '1px solid #000'; // Add border to table
+
+        // Populate the new table with rows and cells
+        for (var i = 0; i < rows.length; i++) {
+            var newRow = document.createElement('tr');
+
+            for (var j = 0; j < rows[i].length; j++) {
+                var originalCell = document.createElement('td');
+                originalCell.innerText = rows[i][j];
+                originalCell.style.verticalAlign = 'middle';
+                originalCell.style.textAlign = 'center';
+                originalCell.style.border = '1px solid #000'; // Add border to cells
+                originalCell.setAttribute('mso-number-format', '\@'); // Set column format as text
+                newRow.appendChild(originalCell);
+            }
+
+            newTable.appendChild(newRow);
+        }
+
+        // Convert the new table to HTML string
+        var tableHtml = newTable.outerHTML;
+        var blob = new Blob([tableHtml], {
+            type: 'application/vnd.ms-excel'
+        });
+
+        // Create a download link and trigger the download
+        var url = window.URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'service-data.xls';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
 </script>
+
+
+
 </html>

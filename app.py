@@ -255,6 +255,24 @@ def execute():
 
                                     request_executed = True
 
+                            # Parse response to extract StatusCD and StatusDesc if available
+                            status_cd = None
+                            status_desc = None
+                            try:
+                                root = ET.fromstring(response.text)
+                                status_cd_element = root.find('.//StatusCD')
+                                status_cd = status_cd_element.text if status_cd_element is not None else ''
+
+                                status_desc_element = root.find('.//StatusDesc')
+                                status_desc = status_desc_element.text if status_desc_element is not None else ''
+                            except (ET.ParseError, AttributeError):
+                                try:
+                                    json_response = json.loads(response.text)
+                                    status_cd = json_response.get('StatusCD', '')
+                                    status_desc = json_response.get('StatusDesc', '')
+                                except (json.JSONDecodeError, AttributeError):
+                                    pass
+
                             # Perform validation based on successCriteria
                             iteration_status = 'PASS' if entry['successCriteria'] in response.text else 'FAIL'
                             if iteration_status == 'PASS':
@@ -266,7 +284,7 @@ def execute():
                             if iteration_status == 'FAIL':
                                 overall_status = 'RED'  # Update overall_status if any iteration fails
 
-                            responses.append({'response': response.text, 'status': iteration_status})
+                            responses.append({'response': response.text, 'status': iteration_status, 'status_cd': status_cd, 'status_desc': status_desc})
 
                             # Append response code and message to status_descriptions
                             if iteration_status == 'FAIL':
