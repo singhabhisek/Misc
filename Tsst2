@@ -127,6 +127,245 @@ if __name__ == '__main__':
     app.run(debug=True)
 ```
 
+
+
+
+
+-----
+
+
+
+To open the edit form as a modal popup instead of navigating to a separate page, you can use Bootstrap modals. Here’s how you can achieve that:
+
+1. **Add Bootstrap and jQuery dependencies**.
+2. **Modify your table to include an Edit button that triggers a modal**.
+3. **Create the modal structure in your HTML**.
+4. **Implement JavaScript to handle the modal logic**.
+5. **Update your Flask route to handle AJAX requests for editing records**.
+
+### Step 1: Add Bootstrap and jQuery dependencies
+
+Ensure you have the necessary CSS and JavaScript files for Bootstrap and jQuery in your HTML.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NFRInsightIQ</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/dataTables.bootstrap4.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+    <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.21/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</head>
+<body>
+```
+
+### Step 2: Modify your table to include an Edit button that triggers a modal
+
+Update your table to include Edit buttons with data attributes to store record information.
+
+```html
+<div class="container">
+    <h2>NFRInsightIQ - Manage NFR elegantly</h2>
+    <table id="nfrTable" class="table table-striped table-bordered" style="width:100%">
+        <thead>
+            <tr>
+                <th>Application Name</th>
+                <th>Release ID</th>
+                <th>Business Scenario</th>
+                <th>Trx Name</th>
+                <th>SLA</th>
+                <th>TPS</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for post in posts %}
+            <tr>
+                <td>{{ post['applicationName'] }}</td>
+                <td>{{ post['releaseID'] }}</td>
+                <td>{{ post['businessScenario'] }}</td>
+                <td>{{ post['transactionName'] }}</td>
+                <td>{{ post['SLA'] }}</td>
+                <td>{{ post['TPS'] }}</td>
+                <td>
+                    <button class="btn btn-primary edit-btn" data-toggle="modal" data-target="#editModal"
+                            data-id="{{ post['id'] }}"
+                            data-applicationname="{{ post['applicationName'] }}"
+                            data-releaseid="{{ post['releaseID'] }}"
+                            data-businessscenario="{{ post['businessScenario'] }}"
+                            data-transactionname="{{ post['transactionName'] }}"
+                            data-sla="{{ post['SLA'] }}"
+                            data-tps="{{ post['TPS'] }}">Edit</button>
+                    <button class="btn btn-danger delete-btn" data-id="{{ post['id'] }}">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+```
+
+### Step 3: Create the modal structure in your HTML
+
+Add a modal structure in your HTML where the edit form will be displayed.
+
+```html
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Edit Record</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="editForm" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editApplicationName">Application Name</label>
+                        <input type="text" class="form-control" id="editApplicationName" name="applicationName">
+                    </div>
+                    <div class="form-group">
+                        <label for="editReleaseID">Release ID</label>
+                        <input type="text" class="form-control" id="editReleaseID" name="releaseID">
+                    </div>
+                    <div class="form-group">
+                        <label for="editBusinessScenario">Business Scenario</label>
+                        <input type="text" class="form-control" id="editBusinessScenario" name="businessScenario">
+                    </div>
+                    <div class="form-group">
+                        <label for="editTransactionName">Trx Name</label>
+                        <input type="text" class="form-control" id="editTransactionName" name="transactionName">
+                    </div>
+                    <div class="form-group">
+                        <label for="editSLA">SLA</label>
+                        <input type="text" class="form-control" id="editSLA" name="SLA">
+                    </div>
+                    <div class="form-group">
+                        <label for="editTPS">TPS</label>
+                        <input type="text" class="form-control" id="editTPS" name="TPS">
+                    </div>
+                    <input type="hidden" id="editID" name="id">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+```
+
+### Step 4: Implement JavaScript to handle the modal logic
+
+Add JavaScript to handle the click event on the Edit button, populate the modal form, and handle form submission.
+
+```html
+<script>
+$(document).ready(function() {
+    $('#nfrTable').DataTable();
+
+    // Populate the edit modal with existing data
+    $('#editModal').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget); // Button that triggered the modal
+        var id = button.data('id');
+        var applicationName = button.data('applicationname');
+        var releaseID = button.data('releaseid');
+        var businessScenario = button.data('businessscenario');
+        var transactionName = button.data('transactionname');
+        var SLA = button.data('sla');
+        var TPS = button.data('tps');
+        
+        var modal = $(this);
+        modal.find('#editID').val(id);
+        modal.find('#editApplicationName').val(applicationName);
+        modal.find('#editReleaseID').val(releaseID);
+        modal.find('#editBusinessScenario').val(businessScenario);
+        modal.find('#editTransactionName').val(transactionName);
+        modal.find('#editSLA').val(SLA);
+        modal.find('#editTPS').val(TPS);
+    });
+
+    // Handle form submission with AJAX
+    $('#editForm').on('submit', function(event) {
+        event.preventDefault();
+
+        $.ajax({
+            url: '/edit/' + $('#editID').val(),
+            type: 'POST',
+            data: $(this).serialize(),
+            success: function(response) {
+                if (response.success) {
+                    $('#editModal').modal('hide');
+                    alert('Record updated successfully.');
+                    location.reload();
+                } else {
+                    alert('Error updating record.');
+                }
+            }
+        });
+    });
+
+    // Delete button click event with confirmation
+    $('.delete-btn').on('click', function() {
+        var id = $(this).data('id');
+        if (confirm('Are you sure you want to delete this record?')) {
+            $.ajax({
+                url: '/delete/' + id,
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        alert('Record deleted successfully.');
+                        location.reload();
+                    } else {
+                        alert('Error deleting record.');
+                    }
+                }
+            });
+        }
+    });
+});
+</script>
+```
+
+### Step 5: Update your Flask route to handle AJAX requests for editing records
+
+Modify your Flask route to handle AJAX POST requests for editing records.
+
+```python
+from flask import Flask, render_template, request, jsonify
+app = Flask(__name__)
+
+# Mock data
+posts = [
+    {"id": 1, "applicationName": "SunView Treasury Manager", "releaseID": "2023.M07", "businessScenario": "NA", "transactionName": "SVTM Login", "SLA": 10.0, "TPS": 2.0},
+    # Add more records as needed
+]
+
+@app.route('/')
+def index():
+    return render_template('index.html', posts=posts)
+
+@app.route('/edit/<int:id>', methods=['POST'])
+def edit_record(id):
+    record = next((post for post in posts if post["id"] == id), None)
+    if record:
+        record['applicationName'] = request.form['applicationName']
+        record['releaseID'] = request.form['releaseID']
+        record['businessScenario'] = request.form['businessScenario']
+        record['transactionName'] = request.form['transactionName']
+        record['SLA'] = request.form['SLA']
+        record['TPS'] = request.form['TPS']
+        return jsonify(success=True)
+    return
+
+
 ### Explanation
 
 1. **HTML Form**: The HTML form remains the same, allowing users to upload an Excel file.
