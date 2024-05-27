@@ -1,0 +1,146 @@
+Sure, here’s how you can achieve the same functionality without using `pandas`. Instead, we will use the `openpyxl` library to read the Excel file and extract the data directly.
+
+### Step 1: Set up Flask and `openpyxl`
+
+Ensure you have Flask and `openpyxl` installed:
+
+```bash
+pip install flask openpyxl
+```
+
+### Step 2: Create an HTML form for file upload
+
+This remains the same as before. Create an HTML form to allow users to upload an Excel file.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Excel File</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+    <h2>Upload Excel File</h2>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Choose Excel file</label>
+            <input type="file" class="form-control-file" id="file" name="file">
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+</div>
+</body>
+</html>
+```
+
+### Step 3: Handle the file upload and process the Excel file
+
+Modify your Flask application to handle the file upload and process it using `openpyxl`.
+
+```python
+import os
+import sqlite3
+from flask import Flask, request, redirect, url_for, render_template, flash
+from openpyxl import load_workbook
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.secret_key = 'supersecretkey'
+
+# Ensure the upload folder exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# SQLite database setup
+DATABASE = 'nfrinsightiq.db'
+
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    return conn
+
+def init_db():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS NFRDetails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            applicationName TEXT,
+            releaseID TEXT,
+            businessScenario TEXT,
+            transactionName TEXT,
+            SLA REAL,
+            TPS REAL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+@app.route('/')
+def index():
+    return render_template('upload.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(request.url)
+    file = request.files['file']
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(request.url)
+    if file:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(filepath)
+        
+        # Process the uploaded file
+        try:
+            wb = load_workbook(filepath)
+            sheet = wb.active
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            for row in sheet.iter_rows(min_row=2, values_only=True):  # Assuming the first row is the header
+                applicationName, releaseID, businessScenario, transactionName, SLA, TPS = row
+                cursor.execute('''
+                    INSERT INTO NFRDetails (applicationName, releaseID, businessScenario, transactionName, SLA, TPS)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    applicationName, 
+                    releaseID, 
+                    businessScenario, 
+                    transactionName, 
+                    SLA, 
+                    TPS
+                ))
+            
+            conn.commit()
+            conn.close()
+            flash('File successfully uploaded and data inserted.')
+        except Exception as e:
+            flash(f'An error occurred: {e}')
+        
+        return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
+```
+
+### Explanation
+
+1. **HTML Form**: The HTML form remains the same, allowing users to upload an Excel file.
+2. **File Upload Handling**: The `upload_file` route in Flask handles the uploaded file. The file is saved to a directory specified by `UPLOAD_FOLDER`.
+3. **Excel File Processing**: Instead of using `pandas`, the `openpyxl` library is used to read the Excel file. The `load_workbook` function opens the Excel file, and `sheet.iter_rows` iterates over the rows, extracting the data.
+4. **Database Insertion**: The extracted data is inserted into the SQLite database using a cursor.
+
+### Running the Flask Application
+
+Now you can run your Flask application:
+
+```bash
+python app.py
+```
+
+Navigate to `http://127.0.0.1:5000/` in your web browser, and you should see the form to upload an Excel file. When you upload a file, it will be processed, and the data will be inserted into the SQLite database.
+
