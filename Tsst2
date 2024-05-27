@@ -468,4 +468,181 @@ By following these steps, you can simulate the behavior of a SQL Server stored p
 
 -----
 
+Sure, I'll help you translate the SQL Server code to SQLite. Below is the equivalent SQLite code for the provided SQL Server stored procedure. Note that SQLite does not support stored procedures natively. Instead, you would typically handle this logic in the application layer, such as within your Flask application.
 
+For demonstration purposes, I'll provide a script-like approach that you can use in your Flask application or any other SQLite-compatible environment.
+
+### SQL Server Procedure
+
+Here is the original SQL Server procedure you provided:
+
+```sql
+CREATE PROCEDURE [dbo].[NFROperationDependency_InsertUpdate]
+    @applicationName varchar(255),
+    @releaseID varchar(255),
+    @businessScenario varchar(255),
+    @transactionName varchar(255),
+    @backendCall varchar(255),
+    @callType varchar(255),
+    @createdBy varchar(255),
+    @modifiedBy varchar(255),
+    @retValue varchar(255) OUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (SELECT 1 FROM NFROperationDependency 
+               WHERE applicationName = @applicationName 
+               AND businessScenario = @businessScenario 
+               AND transactionName = @transactionName 
+               AND releaseID = @releaseID 
+               AND backendCall = @backendCall)
+    BEGIN
+        UPDATE NFROperationDependency 
+        SET applicationName = @applicationName,
+            releaseID = @releaseID,
+            businessScenario = @businessScenario,
+            transactionName = @transactionName,
+            backendCall = @backendCall,
+            callType = @callType,
+            modifiedBy = @modifiedBy,
+            modified_date = GETDATE()
+        WHERE applicationName = @applicationName 
+          AND businessScenario = @businessScenario 
+          AND transactionName = @transactionName 
+          AND releaseID = @releaseID 
+          AND backendCall = @backendCall;
+          
+        SET @retValue = 'UPDATED';
+    END
+    ELSE
+    BEGIN
+        INSERT INTO NFROperationDependency (applicationName, releaseID, businessScenario, transactionName, backendCall, callType, createdBy, modifiedBy)
+        VALUES (@applicationName, @releaseID, @businessScenario, @transactionName, @backendCall, @callType, @createdBy, @modifiedBy);
+        
+        SET @retValue = 'INSERTED';
+    END
+END;
+```
+
+### Equivalent SQLite Code
+
+Since SQLite doesn't support stored procedures, we will use Python within a Flask route to perform the equivalent logic.
+
+```python
+import sqlite3
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+DATABASE = 'nfrinsightiq.db'
+
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    return conn
+
+@app.route('/update_or_insert', methods=['POST'])
+def update_or_insert():
+    data = request.json
+    applicationName = data['applicationName']
+    releaseID = data['releaseID']
+    businessScenario = data['businessScenario']
+    transactionName = data['transactionName']
+    backendCall = data['backendCall']
+    callType = data['callType']
+    createdBy = data['createdBy']
+    modifiedBy = data['modifiedBy']
+    
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT 1 FROM NFROperationDependency 
+        WHERE applicationName = ? 
+          AND businessScenario = ? 
+          AND transactionName = ? 
+          AND releaseID = ? 
+          AND backendCall = ?
+    ''', (applicationName, businessScenario, transactionName, releaseID, backendCall))
+
+    exists = cursor.fetchone()
+
+    if exists:
+        cursor.execute('''
+            UPDATE NFROperationDependency 
+            SET applicationName = ?,
+                releaseID = ?,
+                businessScenario = ?,
+                transactionName = ?,
+                backendCall = ?,
+                callType = ?,
+                modifiedBy = ?,
+                modified_date = datetime('now')
+            WHERE applicationName = ? 
+              AND businessScenario = ? 
+              AND transactionName = ? 
+              AND releaseID = ? 
+              AND backendCall = ?
+        ''', (applicationName, releaseID, businessScenario, transactionName, backendCall, callType, modifiedBy, applicationName, businessScenario, transactionName, releaseID, backendCall))
+        
+        retValue = 'UPDATED'
+    else:
+        cursor.execute('''
+            INSERT INTO NFROperationDependency (applicationName, releaseID, businessScenario, transactionName, backendCall, callType, createdBy, modifiedBy)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (applicationName, releaseID, businessScenario, transactionName, backendCall, callType, createdBy, modifiedBy))
+        
+        retValue = 'INSERTED'
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({'retValue': retValue})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+### Explanation
+
+1. **Flask Endpoint**: We define a Flask route `/update_or_insert` that listens for POST requests. This endpoint receives the data in JSON format.
+2. **Database Connection**: A function `get_db()` is used to connect to the SQLite database.
+3. **Select Query**: We use a `SELECT` query to check if a record with the specified criteria already exists.
+4. **Update or Insert**: Depending on the existence of the record, we either `UPDATE` the existing record or `INSERT` a new one.
+5. **Return Value**: The endpoint returns a JSON response indicating whether the operation was an update or an insert.
+
+### Initialization of the SQLite Database
+
+Make sure to initialize your database and create the `NFROperationDependency` table before running the application:
+
+```python
+def init_db():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS NFROperationDependency (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            applicationName TEXT,
+            releaseID TEXT,
+            businessScenario TEXT,
+            transactionName TEXT,
+            backendCall TEXT,
+            callType TEXT,
+            createdBy TEXT,
+            modifiedBy TEXT,
+            modified_date TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
+```
+
+This script will create the necessary table in your SQLite database if it doesn't already exist. You can now run your Flask application and use the `/update_or_insert` endpoint to insert or update records based on the provided data.
+
+
+
+
+--
