@@ -383,3 +383,89 @@ python app.py
 
 Navigate to `http://127.0.0.1:5000/` in your web browser, and you should see the form to upload an Excel file. When you upload a file, it will be processed, and the data will be inserted into the SQLite database.
 
+-----
+
+
+
+To convert the given SQL Server stored procedure code to a format that can be used in SQLite, you need to consider the following key differences:
+
+1. **Stored Procedures**: SQLite does not support stored procedures directly like SQL Server. Instead, you can use triggers or scripts to achieve similar functionality.
+2. **Variable Declaration**: SQLite uses different syntax for variable handling.
+3. **Date and Time Functions**: `GETDATE()` in SQL Server should be replaced with `CURRENT_TIMESTAMP` in SQLite.
+
+Below is a step-by-step translation of your SQL Server procedure to an equivalent SQLite script using a trigger and a function to simulate the behavior:
+
+### Step 1: Create a function to handle the update or insert logic
+Since SQLite does not support stored procedures, we will create a user-defined function in SQLite to handle the logic.
+
+```sql
+CREATE TABLE IF NOT EXISTS NFRDetails (
+    applicationName TEXT,
+    releaseID TEXT,
+    businessScenario TEXT,
+    transactionName TEXT,
+    SLA REAL,
+    TPS REAL,
+    comments TEXT,
+    createdBy TEXT,
+    modifiedBy TEXT,
+    modified_date TEXT
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_InsertUpdate_NFRDetails
+AFTER INSERT ON NFRDetails
+FOR EACH ROW
+BEGIN
+    UPDATE NFRDetails
+    SET 
+        applicationName = NEW.applicationName,
+        releaseID = NEW.releaseID,
+        businessScenario = NEW.businessScenario,
+        transactionName = NEW.transactionName,
+        SLA = NEW.SLA,
+        TPS = NEW.TPS,
+        comments = NEW.comments,
+        modifiedBy = NEW.modifiedBy,
+        modified_date = CURRENT_TIMESTAMP
+    WHERE 
+        applicationName = NEW.applicationName AND
+        businessScenario = NEW.businessScenario AND
+        transactionName = NEW.transactionName AND
+        releaseID = NEW.releaseID;
+
+    -- If no rows were updated, insert the new row
+    INSERT INTO NFRDetails (
+        applicationName, releaseID, businessScenario, transactionName, SLA, TPS, comments, createdBy, modifiedBy, modified_date
+    )
+    SELECT
+        NEW.applicationName, NEW.releaseID, NEW.businessScenario, NEW.transactionName, NEW.SLA, NEW.TPS, NEW.comments, NEW.createdBy, NEW.modifiedBy, CURRENT_TIMESTAMP
+    WHERE 
+        (SELECT changes() = 0);
+END;
+```
+
+### Step 2: Insert or update the NFRDetails table
+To perform an insert or update operation, you would directly execute an `INSERT` statement that triggers the defined behavior.
+
+```sql
+INSERT INTO NFRDetails (
+    applicationName, releaseID, businessScenario, transactionName, SLA, TPS, comments, createdBy, modifiedBy
+) VALUES (
+    'app1', 'release1', 'scenario1', 'transaction1', 99.9, 100, 'comment', 'creator', 'modifier'
+);
+```
+
+This approach leverages SQLite triggers to handle the logic defined in your SQL Server stored procedure. The `INSERT` statement will trigger the logic to update the row if it exists or insert a new one if it does not.
+
+### Explanation
+- **Trigger**: `AFTER INSERT ON NFRDetails`: This trigger fires after an insert operation on the `NFRDetails` table.
+- **Update Statement**: The `UPDATE` statement inside the trigger attempts to update the existing row.
+- **Insert Statement**: The `INSERT` statement with the condition `(SELECT changes() = 0)` ensures that a new row is inserted only if the `UPDATE` did not modify any rows (indicated by `changes() = 0`).
+
+By following these steps, you can simulate the behavior of a SQL Server stored procedure for insert or update operations in SQLite.
+
+
+
+-----
+
+
