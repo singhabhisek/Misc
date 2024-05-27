@@ -646,3 +646,253 @@ This script will create the necessary table in your SQLite database if it doesn'
 
 
 --
+
+
+To create a web page similar to the one shown, using Python Flask and SQLite, you'll need to do the following:
+
+1. **Set up the Flask application**.
+2. **Create the SQLite database and populate it with sample data**.
+3. **Create routes to fetch and display data**.
+4. **Use JavaScript and HTML to handle the pop-up functionality for the backend details**.
+
+Let's break this down step-by-step:
+
+### Step 1: Set Up Flask Application
+
+First, set up the basic Flask application structure.
+
+#### Directory Structure
+```
+flask_app/
+    ├── app.py
+    ├── templates/
+    │   └── index.html
+    ├── static/
+    │   └── styles.css
+    └── data/
+        └── nfr.db
+```
+
+#### app.py
+```python
+from flask import Flask, render_template, request, jsonify
+import sqlite3
+
+app = Flask(__name__)
+
+# Function to get a database connection
+def get_db_connection():
+    conn = sqlite3.connect('data/nfr.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/')
+def index():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM NFRDetails")
+    nfr_records = cursor.fetchall()
+    conn.close()
+    return render_template('index.html', records=nfr_records)
+
+@app.route('/backend_details/<app_name>/<transaction_name>')
+def backend_details(app_name, transaction_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM NFROperationDependency WHERE applicationName = ? AND transactionName = ?", (app_name, transaction_name))
+    backend_details = cursor.fetchall()
+    conn.close()
+    return jsonify([dict(ix) for ix in backend_details])
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+### Step 2: Create SQLite Database
+
+Create an SQLite database (`nfr.db`) with tables and some sample data.
+
+#### Create and populate the SQLite database
+```sql
+-- Create NFRDetails table
+CREATE TABLE NFRDetails (
+    applicationName TEXT,
+    releaseID TEXT,
+    transactionName TEXT,
+    SLA INTEGER
+);
+
+-- Create NFROperationDependency table
+CREATE TABLE NFROperationDependency (
+    applicationName TEXT,
+    releaseID TEXT,
+    transactionName TEXT,
+    backendCall TEXT,
+    callType TEXT,
+    duration INTEGER
+);
+
+-- Insert sample data into NFRDetails
+INSERT INTO NFRDetails (applicationName, releaseID, transactionName, SLA) VALUES ('OLB', '2023.7', 'Offers', 19);
+INSERT INTO NFRDetails (applicationName, releaseID, transactionName, SLA) VALUES ('OLB', '2023.7', 'TrxHistory', 15);
+
+-- Insert sample data into NFROperationDependency
+INSERT INTO NFROperationDependency (applicationName, releaseID, transactionName, backendCall, callType, duration) VALUES ('OLB', '2023.7', 'Offers', 'WS_Offers', 'Sync', 12);
+INSERT INTO NFROperationDependency (applicationName, releaseID, transactionName, backendCall, callType, duration) VALUES ('OLB', '2023.7', 'TrxHistory', 'WS_Rewards', 'Async', 10);
+```
+
+### Step 3: Create Routes to Fetch and Display Data
+
+You already have the routes set up in `app.py`. The main route fetches data from the `NFRDetails` table and passes it to the template. Another route fetches backend details based on the application name and transaction name.
+
+### Step 4: HTML Template
+
+Create an HTML template to display the data.
+
+#### templates/index.html
+```html
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NFR Insight</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Non-Functional Requirement Records</h1>
+    <table id="recordsTable">
+        <thead>
+            <tr>
+                <th>Application Name</th>
+                <th>Release ID</th>
+                <th>Transaction Name</th>
+                <th>SLA (sec)</th>
+                <th>Comparison</th>
+                <th>Backend Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+                <tr>
+                    <td>{{ record['applicationName'] }}</td>
+                    <td>{{ record['releaseID'] }}</td>
+                    <td>{{ record['transactionName'] }}</td>
+                    <td>{{ record['SLA'] }}</td>
+                    <td><span class="indicator">{{ '↑' if record['SLA'] > 10 else '↓' }}</span></td>
+                    <td><button class="details-btn" data-app-name="{{ record['applicationName'] }}" data-trx-name="{{ record['transactionName'] }}">View Details</button></td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Backend Details</h2>
+            <div id="backendDetails"></div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $('.details-btn').on('click', function() {
+                var appName = $(this).data('app-name');
+                var trxName = $(this).data('trx-name');
+                $.get('/backend_details/' + appName + '/' + trxName, function(data) {
+                    var detailsHtml = '<ul>';
+                    data.forEach(function(detail) {
+                        detailsHtml += '<li>Backend Call: ' + detail.backendCall + ', Type: ' + detail.callType + ', Duration: ' + detail.duration + ' sec</li>';
+                    });
+                    detailsHtml += '</ul>';
+                    $('#backendDetails').html(detailsHtml);
+                    $('#modal').show();
+                });
+            });
+
+            $('.close').on('click', function() {
+                $('#modal').hide();
+            });
+        });
+    </script>
+</body>
+</html>
+```
+
+#### static/styles.css
+```css
+body {
+    font-family: Arial, sans-serif;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+th {
+    background-color: #f2f2f2;
+}
+
+.indicator {
+    font-weight: bold;
+    color: green;
+}
+
+button.details-btn {
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0, 0, 0);
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+```
+
+### Explanation
+1. **Flask Backend**: The `app.py` file handles the server-side logic. It connects to the SQLite database, retrieves data, and serves it to the HTML template.
+2. **HTML Template**: The `index.html` file is responsible for displaying the data in a table and handling user interactions.
+3. **JavaScript and CSS**: JavaScript (jQuery) is used to handle the click events for the "View Details" buttons and display the modal with backend details. CSS is used for basic styling of the table and modal.
+
+This setup should help you create a web page similar to the one in the provided image using Flask and SQLite.
+
+
+
+
