@@ -1371,4 +1371,291 @@ Here's an example of the HTML structure for the edit modal and a container to di
 
 This approach ensures that the user receives immediate feedback on their actions without needing to refresh the page.
 
+----
+
+To create a web page in Flask that mimics the functionality of the page you described, we need to:
+
+1. Create a Flask application.
+2. Set up SQLite as the database.
+3. Implement the SQL query to fetch data.
+4. Create the necessary HTML templates with JavaScript for interactivity.
+5. Implement backend logic to handle AJAX requests for data population and filtering.
+
+Let's start by creating a Flask project with the necessary components:
+
+### 1. Setting up Flask Project
+
+#### Project Structure
+```
+flask_project/
+│
+├── app.py
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   └── popup.html
+├── static/
+│   └── js/
+│       └── main.js
+└── database/
+    └── app.db
+```
+
+### 2. Installing Dependencies
+Make sure you have Flask and SQLite installed. If not, install them using pip:
+```sh
+pip install Flask sqlite3
+```
+
+### 3. Setting up `app.py`
+Here's the main Flask application code:
+
+```python
+from flask import Flask, render_template, request, jsonify
+import sqlite3
+
+app = Flask(__name__)
+
+def get_db_connection():
+    conn = sqlite3.connect('database/app.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/')
+def index():
+    conn = get_db_connection()
+    applications = conn.execute('SELECT DISTINCT applicationName FROM NFRDetails').fetchall()
+    conn.close()
+    return render_template('index.html', applications=applications)
+
+@app.route('/get_releases', methods=['POST'])
+def get_releases():
+    application_name = request.form['application_name']
+    conn = get_db_connection()
+    releases = conn.execute('SELECT DISTINCT releaseID FROM NFRDetails WHERE applicationName = ?', (application_name,)).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in releases])
+
+@app.route('/get_transactions', methods=['POST'])
+def get_transactions():
+    application_name = request.form['application_name']
+    release_id = request.form['release_id']
+    query = 'SELECT DISTINCT transactionName FROM NFRDetails WHERE applicationName = ?'
+    params = [application_name]
+    if release_id:
+        query += ' AND releaseID = ?'
+        params.append(release_id)
+    conn = get_db_connection()
+    transactions = conn.execute(query, params).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in transactions])
+
+@app.route('/search', methods=['POST'])
+def search():
+    application_name = request.form['application_name']
+    release_id = request.form['release_id']
+    transaction_name = request.form['transaction_name']
+    conn = get_db_connection()
+    query = '''
+    WITH NFROperationDepend AS (
+        SELECT DISTINCT t.applicationName, t.releaseID, t.transactionName, t.SLA, d.backendCall, d.callType 
+        FROM NFRDetails t 
+        LEFT JOIN NFROperationDependency d 
+        ON t.transactionName = d.transactionName AND t.releaseID = d.releaseID AND t.applicationName = d.applicationName 
+        WHERE t.applicationName = ? AND t.releaseID = ?
+    )
+    SELECT applicationName, transactionName, releaseID, 
+    SUM(CASE WHEN SLA > TotalSyncSLA THEN 'Higher' ELSE 'Lower' END) AS Compare 
+    FROM NFROperationDepend 
+    GROUP BY applicationName, transactionName, releaseID
+    '''
+    results = conn.execute(query, (application_name, release_id)).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in results])
+
+@app.route('/get_backend_details', methods=['POST'])
+def get_backend_details():
+    application_name = request.form['application_name']
+    transaction_name = request.form['transaction_name']
+    conn = get_db_connection()
+    backend_details = conn.execute('SELECT backendCall FROM NFROperationDependency WHERE applicationName = ? AND transactionName = ?', 
+                                   (application_name, transaction_name)).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in backend_details])
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+### 4. Setting up HTML Templates
+
+#### `templates/base.html`
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NFR Insight</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
+```
+
+#### `templates/index.html`
+```html
+{% extends "base.html" %}
+{% block content %}
+<h1>NFR Insight</h1>
+<form id="searchForm">
+    <label for="applicationName">Select Application:</label>
+    <select id="applicationName" name="applicationName">
+        <option value="">--Select--</option>
+        {% for app in applications %}
+            <option value="{{ app['applicationName'] }}">{{ app['applicationName'] }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="releaseID">Select Release:</label>
+    <select id="releaseID" name="releaseID">
+        <option value="">--Select--</option>
+    </select>
+
+    <label for="transactionName">Select Transaction:</label>
+    <input type="text" id="transactionName" name="transactionName">
+
+    <button type="submit">Search Records</button>
+</form>
+
+<table id="resultsTable">
+    <thead>
+        <tr>
+            <th>Application Name</th>
+            <th>Release ID</th>
+            <th>Transaction Name</th>
+            <th>SLA (sec)</th>
+            <th>Comparison</th>
+            <th>Backend Details</th>
+        </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+
+<div id="backendDetailsPopup" style="display:none;">
+    <h2>Backend Details</h2>
+    <div id="backendDetailsContent"></div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}
+```
+
+### 5. Setting up JavaScript
+
+#### `static/js/main.js`
+```javascript
+$(document).ready(function() {
+    $('#applicationName').change(function() {
+        var appName = $(this).val();
+        if (appName) {
+            $.ajax({
+                type: 'POST',
+                url: '/get_releases',
+                data: {application_name: appName},
+                success: function(data) {
+                    $('#releaseID').empty().append('<option value="">--Select--</option>');
+                    $.each(data, function(index, value) {
+                        $('#releaseID').append('<option value="' + value.releaseID + '">' + value.releaseID + '</option>');
+                    });
+                }
+            });
+        }
+    });
+
+    $('#releaseID').change(function() {
+        var appName = $('#applicationName').val();
+        var releaseID = $(this).val();
+        if (appName) {
+            $.ajax({
+                type: 'POST',
+                url: '/get_transactions',
+                data: {
+                    application_name: appName,
+                    release_id: releaseID
+                },
+                success: function(data) {
+                    $('#transactionName').autocomplete({
+                        source: data.map(function(item) {
+                            return item.transactionName;
+                        })
+                    });
+                }
+            });
+        }
+    });
+
+    $('#searchForm').submit(function(e) {
+        e.preventDefault();
+        var appName = $('#applicationName').val();
+        var releaseID = $('#releaseID').val();
+        var transactionName = $('#transactionName').val();
+
+        $.ajax({
+            type: 'POST',
+            url: '/search',
+            data: {
+                application_name: appName,
+                release_id: releaseID,
+                transaction_name: transactionName
+            },
+            success: function(data) {
+                $('#resultsTable tbody').empty();
+                $.each(data, function(index, value) {
+                    var row = '<tr>';
+                    row += '<td>' + value.applicationName + '</td>';
+                    row += '<td>' + value.releaseID + '</td>';
+                    row += '<td>' + value.transactionName + '</td>';
+                    row += '<td>' + value.SLA + '</td>';
+                    row += '<td>' + value.Compare + '</td>';
+                    row += '<td><button class="backendDetailsBtn" data-app="' + value.applicationName + '" data-trx="' + value.transactionName + '">View</button></td>';
+                    row += '</tr>';
+                    $('#resultsTable tbody').append(row);
+                });
+
+                $('.backendDetailsBtn').click(function() {
+                    var appName = $(this).data('app');
+                    var trxName = $(this).data('trx');
+                    $.ajax({
+                        type: 'POST',
+                        url: '/get_backend_details',
+                        data: {
+                            application_name: appName,
+                            transaction_name: trxName
+                        },
+                        success: function(data) {
+                            $('#backendDetailsContent').empty();
+                            $.each(data, function(index, value) {
+                                $('#backendDetailsContent').append('<p>' + value.backendCall + '</p>');
+                            });
+                            $('#backendDetailsPopup').show();
+                        }
+                    });
+                });
+            }
+        });
+    });
+});
+```
+
+### 6. SQLite Database
+Make sure your SQLite database is set up correctly with the necessary tables (`NFRDetails` and `NFROperationDependency`). You can use a tool like DB Browser for SQLite to create and populate these tables.
+
+This setup will create a
+
 
