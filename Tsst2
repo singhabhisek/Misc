@@ -1145,4 +1145,230 @@ This setup should help you create a web page similar to the one in the provided 
 
 
 
+---
+
+To handle showing messages returned from `app.py` on the front end, we will use AJAX for the form submissions and dynamically display the messages on the page. We will create an area on the page to display these messages. Below is the detailed implementation:
+
+### `app.py`
+
+Ensure the `edit_record` and `delete_record` routes return JSON responses for success and error messages:
+
+```python
+@app.route('/edit/<int:id>', methods=['POST'])
+def edit_record(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        applicationName = request.form['applicationName']
+        releaseID = request.form['releaseID']
+        businessScenario = request.form['businessScenario']
+        transactionName = request.form['transactionName']
+        SLA = request.form['SLA']
+        TPS = request.form['TPS']
+        cursor.execute('''
+            UPDATE NFRDetails
+            SET applicationName = ?, releaseID = ?, businessScenario = ?, transactionName = ?, SLA = ?, TPS = ?
+            WHERE id = ?
+        ''', (applicationName, releaseID, businessScenario, transactionName, SLA, TPS, id))
+        conn.commit()
+        response = {"status": "success", "message": f"Record with ID {id} successfully updated"}
+    except Exception as e:
+        conn.rollback()
+        response = {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+    return jsonify(response)
+
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_record(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM NFRDetails WHERE id = ?", (id,))
+        conn.commit()
+        response = {"status": "success", "message": f"Record with ID {id} successfully deleted"}
+    except Exception as e:
+        conn.rollback()
+        response = {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+    return jsonify(response)
+```
+
+### JavaScript for Handling Modal, AJAX Requests, and Message Display
+
+Include this JavaScript in your HTML to handle the edit and delete operations with AJAX and display messages dynamically:
+
+```javascript
+$(document).ready(function() {
+  function showMessage(message, type) {
+    var messageContainer = $('#messageContainer');
+    messageContainer.removeClass('alert-success alert-danger');
+    if (type === 'success') {
+      messageContainer.addClass('alert-success');
+    } else {
+      messageContainer.addClass('alert-danger');
+    }
+    messageContainer.text(message).show();
+    setTimeout(function() {
+      messageContainer.hide();
+    }, 5000);
+  }
+
+  $('.edit-btn').click(function() {
+    var id = $(this).data('id');
+    $.get('/edit/' + id, function(data) {
+      $('#editId').val(data.id);
+      $('#editApplicationName').val(data.applicationName);
+      $('#editReleaseID').val(data.releaseID);
+      $('#editBusinessScenario').val(data.businessScenario);
+      $('#editTransactionName').val(data.transactionName);
+      $('#editSLA').val(data.SLA);
+      $('#editTPS').val(data.TPS);
+      $('#editModal').modal('show');
+    });
+  });
+
+  $('#editForm').submit(function(e) {
+    e.preventDefault();
+    var id = $('#editId').val();
+    var formData = $(this).serialize();
+    $.post('/edit/' + id, formData, function(response) {
+      if (response.status == 'success') {
+        showMessage(response.message, 'success');
+        $('#editModal').modal('hide');
+        location.reload();  // Reload the page to reflect changes
+      } else {
+        showMessage(response.message, 'error');
+      }
+    });
+  });
+
+  $('.delete-btn').click(function() {
+    var id = $(this).data('id');
+    if (confirm('Are you sure you want to delete this record?')) {
+      $.post('/delete/' + id, function(response) {
+        if (response.status == 'success') {
+          showMessage(response.message, 'success');
+          location.reload();  // Reload the page to reflect changes
+        } else {
+          showMessage(response.message, 'error');
+        }
+      });
+    }
+  });
+});
+```
+
+### HTML for Edit Modal and Message Display
+
+Here's an example of the HTML structure for the edit modal and a container to display messages:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFR Management</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="path/to/your/javascript.js"></script> <!-- Ensure to link your JS file here -->
+</head>
+<body>
+  <div class="container">
+    <h2>NFR Management</h2>
+    
+    <!-- Message Container -->
+    <div id="messageContainer" class="alert" style="display: none;"></div>
+
+    <!-- Table of Records -->
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Application Name</th>
+          <th>Release ID</th>
+          <th>Business Scenario</th>
+          <th>Transaction Name</th>
+          <th>SLA</th>
+          <th>TPS</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td>{{ record.id }}</td>
+          <td>{{ record.applicationName }}</td>
+          <td>{{ record.releaseID }}</td>
+          <td>{{ record.businessScenario }}</td>
+          <td>{{ record.transactionName }}</td>
+          <td>{{ record.SLA }}</td>
+          <td>{{ record.TPS }}</td>
+          <td>
+            <button class="btn btn-primary edit-btn" data-id="{{ record.id }}">Edit</button>
+            <button class="btn btn-danger delete-btn" data-id="{{ record.id }}">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Edit Modal HTML -->
+    <div class="modal" id="editModal">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit Record</h5>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="editForm">
+              <input type="hidden" id="editId" name="id">
+              <div class="form-group">
+                <label for="editApplicationName">Application Name</label>
+                <input type="text" class="form-control" id="editApplicationName" name="applicationName" required>
+              </div>
+              <div class="form-group">
+                <label for="editReleaseID">Release ID</label>
+                <input type="text" class="form-control" id="editReleaseID" name="releaseID" required>
+              </div>
+              <div class="form-group">
+                <label for="editBusinessScenario">Business Scenario</label>
+                <input type="text" class="form-control" id="editBusinessScenario" name="businessScenario" required>
+              </div>
+              <div class="form-group">
+                <label for="editTransactionName">Transaction Name</label>
+                <input type="text" class="form-control" id="editTransactionName" name="transactionName" required>
+              </div>
+              <div class="form-group">
+                <label for="editSLA">SLA</label>
+                <input type="number" class="form-control" id="editSLA" name="SLA" required>
+              </div>
+              <div class="form-group">
+                <label for="editTPS">TPS</label>
+                <input type="number" class="form-control" id="editTPS" name="TPS" required>
+              </div>
+              <button type="submit" class="btn btn-primary">Save changes</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+### Summary
+
+1. **Backend**: Updated the `edit_record` and `delete_record` routes in `app.py` to return JSON responses for success and error messages.
+2. **Frontend**: Added JavaScript to handle form submissions with AJAX and display messages dynamically in a designated message container.
+3. **HTML**: Included a message container to display success or error messages and a modal form for editing records.
+
+This approach ensures that the user receives immediate feedback on their actions without needing to refresh the page.
+
 
