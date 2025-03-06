@@ -31,7 +31,17 @@ Pre-Load Test Focus: Highlighted the tool's role in ensuring API health before l
 Configurability Emphasis: Explicitly mentioned the ability to test any API, regardless of source.
 Virtualization Support: Clearly stated the tool's capability to handle APIs in virtualized environments.
 Conciseness: Maintained the key benefits while streamlining the messaging for clarity.
+------------
 
+Key Functionalities:
+
+View test outcomes: Displays results of API tests (Service Name, Operation Name, Status, Description) and indicates success or failure of individual test iterations.
+Refine test results: Allows filtering of test results by application and searching for specific users.
+Download and customize: Option to export test results to a CSV file and include request and response data.
+Setup test parameters: Selection of the application to test and setting the iteration count for test execution.
+Summarize test results: Provides a summary of test results: Passed all tests, Failed at least one test, Failed all tests.
+Confirm test completion: Displays a pop-up confirmation upon test execution completion.
+Browse and explore results: Allows navigating through multiple pages of test results and provides a "Results" button for detailed information.
 
 ---------
 
