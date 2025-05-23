@@ -1,0 +1,29 @@
+import re
+
+def extract_and_clean_xml_blocks(log_file_path, output_dir):
+    with open(log_file_path, 'r', encoding='utf-8') as f:
+        log_data = f.read()
+
+    # Regex to match XML blocks with iteration numbers
+    pattern = re.compile(
+        r'-----START XML RESPONSE - ITERATION (\d+)-----\n(.*?)\n-----END XML RESPONSE - ITERATION \1-----',
+        re.DOTALL
+    )
+
+    # Regex to remove [MsgId: MERR-<numbers>] patterns
+    msgid_pattern = re.compile(r'\[MsgId: MERR-\d+\]')
+
+    matches = pattern.findall(log_data)
+
+    for iteration, xml_content in matches:
+        # Remove all MsgId patterns inside the XML block
+        cleaned_xml = msgid_pattern.sub('', xml_content)
+
+        file_path = f"{output_dir}/response_iteration_{iteration}.xml"
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(cleaned_xml.strip())  # strip() to remove any leading/trailing whitespace
+
+        print(f"Wrote cleaned iteration {iteration} to {file_path}")
+
+# Example usage
+extract_and_clean_xml_blocks("loadrunner_output.log", "xml_responses")
