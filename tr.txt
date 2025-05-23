@@ -1,0 +1,251 @@
+
+import xml.etree.ElementTree as ET
+
+# Replace this with your actual XML input each time
+xml_data = '''<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org">
+  <soap:Body>
+    <ns0:transactionsreply xmlns:ns0="http://example.com/ns">
+      <ns0:Status></ns0:Status>
+      <ns0:transhist>
+        <ns0:trx>
+          <ns0:date>12/01/2025</ns0:date>
+          <ns0:stopcode>abc</ns0:stopcode>
+          <ns0:acct>1234</ns0:acct>
+          <ns0:amt>77.01</ns0:amt>
+        </ns0:trx>
+        <ns0:trx>
+          <ns0:date>12/02/2025</ns0:date>
+          <ns0:stopcode>par</ns0:stopcode>
+          <ns0:acct>1234</ns0:acct>
+          <ns0:amt>88.50</ns0:amt>
+        </ns0:trx>
+        <ns0:trx>
+          <ns0:date>12/03/2025</ns0:date>
+          <ns0:stopcode>xyz</ns0:stopcode>
+          <ns0:acct>1234</ns0:acct>
+          <ns0:amt>999.01</ns0:amt>
+        </ns0:trx>
+        <ns0:trx>
+          <ns0:date>12/04/2025</ns0:date>
+          <ns0:stopcode>das</ns0:stopcode>
+          <ns0:acct>1234</ns0:acct>
+          <ns0:amt>105.75</ns0:amt>
+        </ns0:trx>
+        <ns0:trx>
+          <ns0:date>12/05/2025</ns0:date>
+          <ns0:stopcode>efg</ns0:stopcode>
+          <ns0:acct>1234</ns0:acct>
+          <ns0:amt>62.40</ns0:amt>
+        </ns0:trx>
+      </ns0:transhist>
+    </ns0:transactionsreply>
+  </soap:Body>
+</soap:Envelope>'''
+
+# XML parsing setup
+namespaces = {
+    'soap': 'http://schemas.xmlsoap.org',
+    'ns0': 'http://example.com/ns'
+}
+
+valid_stopcodes = {'xyz', 'par', 'das'}
+
+# Parse the XML
+root = ET.fromstring(xml_data)
+
+dates = []
+amts = []
+stopcodes = []
+acct = None
+
+# Extract desired values
+for trx in root.findall('.//ns0:trx', namespaces):
+    stopcode = trx.find('ns0:stopcode', namespaces).text
+    if stopcode in valid_stopcodes:
+        date = trx.find('ns0:date', namespaces).text
+        amt = trx.find('ns0:amt', namespaces).text
+        acct = trx.find('ns0:acct', namespaces).text
+        dates.append(date)
+        amts.append(amt)
+        stopcodes.append(stopcode)
+
+# Format the line
+if acct and dates:
+    line = f"{acct}\t{','.join(stopcodes)}\t{','.join(dates)}\t{','.join(amts)}\n"
+
+    # Append to file
+    with open("output.txt", "a") as f:
+        f.write(line)
+
+
+
+===========
+
+
+
+
+import requests
+import xml.etree.ElementTree as ET
+import csv
+
+# Setup
+API_URL = "https://your-api-endpoint.com"  # Replace with your actual URL
+INPUT_FILE = "input.csv"
+OUTPUT_FILE = "output.txt"
+HEADERS = {"Content-Type": "text/xml"}
+VALID_STOPCODES = {"xyz", "par", "das"}
+
+def build_xml_request(account, date):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns0:transactionRequest xmlns:ns0="http://example.com/ns">
+      <ns0:account>{account}</ns0:account>
+      <ns0:date>{date}</ns0:date>
+    </ns0:transactionRequest>
+  </soap:Body>
+</soap:Envelope>"""
+
+def process_response(xml_response):
+    namespaces = {
+        'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+        'ns0': 'http://example.com/ns'
+    }
+
+    root = ET.fromstring(xml_response)
+    trx_elements = root.findall('.//ns0:trx', namespaces)
+
+    acct = None
+    stopcodes = []
+    dates = []
+    amts = []
+
+    for trx in trx_elements:
+        stopcode = trx.find('ns0:stopcode', namespaces).text
+        if stopcode in VALID_STOPCODES:
+            acct = trx.find('ns0:acct', namespaces).text
+            date = trx.find('ns0:date', namespaces).text
+            amt = trx.find('ns0:amt', namespaces).text
+
+            stopcodes.append(stopcode)
+            dates.append(date)
+            amts.append(amt)
+
+    if acct and stopcodes:
+        return f"{acct}\t{','.join(stopcodes)}\t{','.join(dates)}\t{','.join(amts)}\n"
+    return None
+
+# Step 1: Read CSV input and loop through rows
+with open(INPUT_FILE, newline='') as csvfile:
+    reader = csv.reader(csvfile)
+    for row in reader:
+        if len(row) < 2:
+            continue  # skip incomplete lines
+        account, date = row[0].strip(), row[1].strip()
+        xml_payload = build_xml_request(account, date)
+
+        # Step 2: Make POST request
+        try:
+            response = requests.post(API_URL, headers=HEADERS, data=xml_payload)
+            response.raise_for_status()
+            output_line = process_response(response.text)
+
+            if output_line:
+                with open(OUTPUT_FILE, "a") as out_file:
+                    out_file.write(output_line)
+
+        except requests.RequestException as e:
+            print(f"Request failed for account {account}, date {date}: {e}")
+
+
+
+
+
+===========================
+
+
+
+import requests
+import xml.etree.ElementTree as ET
+import csv
+import base64
+
+API_URL = "https://your-api-endpoint.com"
+INPUT_FILE = "input.csv"
+OUTPUT_FILE = "output.txt"
+
+username = "your_username"
+password = "your_password"
+credentials = f"{username}:{password}"
+encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+HEADERS = {
+    "Content-Type": "text/xml",
+    "Authorization": f"Basic {encoded_credentials}",
+    "SOAPAction": "YourSOAPActionHere"
+}
+
+VALID_STOPCODES = {"xyz", "par", "das"}
+
+def build_xml_request(account, date):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns0:transactionRequest xmlns:ns0="http://example.com/ns">
+      <ns0:account>{account}</ns0:account>
+      <ns0:date>{date}</ns0:date>
+    </ns0:transactionRequest>
+  </soap:Body>
+</soap:Envelope>"""
+
+def process_response(xml_response):
+    namespaces = {
+        'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+        'ns0': 'http://example.com/ns'
+    }
+    root = ET.fromstring(xml_response)
+    trx_elements = root.findall('.//ns0:trx', namespaces)
+
+    acct = None
+    stopcodes = []
+    dates = []
+    amts = []
+
+    for trx in trx_elements:
+        stopcode = trx.find('ns0:stopcode', namespaces).text
+        if stopcode in VALID_STOPCODES:
+            acct = trx.find('ns0:acct', namespaces).text
+            date = trx.find('ns0:date', namespaces).text
+            amt = trx.find('ns0:amt', namespaces).text
+
+            stopcodes.append(stopcode)
+            dates.append(date)
+            amts.append(amt)
+
+    if acct and stopcodes:
+        return f"{acct}\t{','.join(stopcodes)}\t{','.join(dates)}\t{','.join(amts)}\n"
+    return None
+
+with open(INPUT_FILE, newline='') as csvfile:
+    reader = csv.reader(csvfile)
+    for row in reader:
+        if len(row) < 2:
+            continue
+        account, date = row[0].strip(), row[1].strip()
+        xml_payload = build_xml_request(account, date)
+
+        try:
+            response = requests.post(API_URL, headers=HEADERS, data=xml_payload)
+            response.raise_for_status()
+            output_line = process_response(response.text)
+
+            if output_line:
+                with open(OUTPUT_FILE, "a") as out_file:
+                    out_file.write(output_line)
+
+        except requests.RequestException as e:
+            print(f"Request failed for account {account}, date {date}: {e}")
+
+
+===========
+
