@@ -1,4 +1,71 @@
 import re
+import json
+import requests
+import csv
+
+# Replace with your actual API endpoint URL
+API_URL = "https://your-api-endpoint.com/createClaim"
+
+def extract_json_blocks(log_file_path):
+    with open(log_file_path, 'r', encoding='utf-8') as f:
+        log_data = f.read()
+
+    pattern = re.compile(
+        r'-----START JSON REQUEST - ITERATION \d+-----\n(.*?)\n-----END JSON REQUEST - ITERATION \d+-----',
+        re.DOTALL
+    )
+
+    json_blocks = pattern.findall(log_data)
+    return json_blocks
+
+def count_dispatch_ids(response_json):
+    dispatches = response_json.get("Dispatches", [])
+    return len(dispatches)
+
+def process_requests(log_file_path, output_csv_path):
+    json_blocks = extract_json_blocks(log_file_path)
+
+    with open(output_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["ClaimID", "DispatchCount", "AcctNumber", "CardNumber"])
+
+        for idx, json_str in enumerate(json_blocks, 1):
+            try:
+                request_data = json.loads(json_str)
+
+                acct_number = request_data.get("AcctNumber", "")
+                card_number = request_data.get("CardNumber", "")
+
+                response = requests.post(API_URL, json=request_data)
+                response.raise_for_status()
+
+                response_json = response.json()
+
+                claim_id = response_json.get("ClaimID", "N/A")
+                dispatch_count = count_dispatch_ids(response_json)
+
+                writer.writerow([claim_id, dispatch_count, acct_number, card_number])
+
+            except json.JSONDecodeError:
+                print(f"Error: Invalid JSON in iteration {idx}")
+            except requests.RequestException as e:
+                print(f"Error: API request failed in iteration {idx} - {e}")
+            except Exception as e:
+                print(f"Unexpected error in iteration {idx} - {e}")
+
+if __name__ == "__main__":
+    LOG_FILE_PATH = "json_requests.log"        # Your input log file
+    OUTPUT_CSV_PATH = "claim_results.csv"      # Output CSV file path
+
+    process_requests(LOG_FILE_PATH, OUTPUT_CSV_PATH)
+    print(f"Results written to {OUTPUT_CSV_PATH}")
+
+
+===========
+
+
+
+import re
 
 def extract_and_clean_xml_blocks(log_file_path, output_dir):
     with open(log_file_path, 'r', encoding='utf-8') as f:
