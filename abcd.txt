@@ -31,3 +31,42 @@ def generate_selective_combinations(input_file, output_file, sample_sizes=[2, 5,
 
 # Example usage
 generate_selective_combinations('input.tsv', 'output.tsv', sample_sizes=[2, 5, 10, 15], threshold=10)
+
+
+
+import random
+import csv
+
+def generate_combinations_without_count(input_file, output_file, sample_sizes=[2, 5, 10, 15], threshold=10):
+    with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
+        reader = csv.reader(infile, delimiter='\t')
+        writer = csv.writer(outfile, delimiter='\t')
+
+        for row in reader:
+            if len(row) != 5:
+                continue  # Skip malformed rows
+
+            account, debit, dates_str, amts_str, codes_str = row
+            dates = dates_str.split(',')
+            amts = amts_str.split(',')
+            codes = codes_str.split(',')
+
+            combo_list = list(zip(dates, amts, codes))
+            total = len(combo_list)
+
+            if total > threshold:
+                for size in sample_sizes:
+                    if size > total:
+                        continue
+                    sample = random.sample(combo_list, size)
+                    sample_dates = ','.join([x[0] for x in sample])
+                    sample_amts = ','.join([x[1] for x in sample])
+                    sample_codes = ','.join([x[2] for x in sample])
+                    writer.writerow([account, debit, sample_dates, sample_amts, sample_codes])
+            else:
+                # Write the original row as-is
+                writer.writerow(row)
+
+# Example usage
+generate_combinations_without_count('input.tsv', 'output.tsv', sample_sizes=[2, 5, 10, 15], threshold=10)
+
