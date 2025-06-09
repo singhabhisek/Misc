@@ -69,6 +69,77 @@ generate_multiple_combinations_per_row(
 
 =====================
 
+#DATE FILTER
+import csv
+import random
+from collections import defaultdict
+
+def get_bucket(count, buckets):
+    """Return the largest bucket from the list that is <= count."""
+    valid_buckets = [b for b in sorted(buckets) if b <= count]
+    return valid_buckets[-1] if valid_buckets else None
+
+def generate_multiple_combinations_per_row(
+    input_file,
+    output_file,
+    buckets=[2, 5, 10, 15],
+    samples_per_row=3,
+    max_debits_per_account=3,
+    min_date_threshold="20250101"  # NEW: Only allow dates greater than this
+):
+    account_debit_counter = defaultdict(set)
+
+    with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
+        reader = csv.reader(infile, delimiter='\t')
+        writer = csv.writer(outfile, delimiter='\t')
+
+        writer.writerow(['account', 'debit', 'dates', 'amounts'])  # header
+
+        for row in reader:
+            if len(row) < 4:
+                continue  # malformed row
+
+            account, debit, dates_str, amts_str = row[:4]
+            dates = dates_str.split(',')
+            amts = amts_str.split(',')
+
+            if len(dates) != len(amts):
+                continue
+
+            # Filter (date, amount) pairs based on min_date_threshold
+            filtered = [(d, a) for d, a in zip(dates, amts) if d > min_date_threshold]
+
+            # Skip rows with less than 2 valid pairs
+            if len(filtered) < 2:
+                continue
+
+            # Enforce max debits per account
+            if debit not in account_debit_counter[account]:
+                if len(account_debit_counter[account]) >= max_debits_per_account:
+                    continue
+                account_debit_counter[account].add(debit)
+
+            bucket = get_bucket(len(filtered), buckets)
+            if bucket is None:
+                continue
+
+            for _ in range(samples_per_row):
+                sample = random.sample(filtered, bucket)
+                sample_dates = ','.join([x[0] for x in sample])
+                sample_amts = ','.join([x[1] for x in sample])
+                writer.writerow([account, debit, sample_dates, sample_amts])
+
+
+generate_multiple_combinations_per_row(
+    input_file='input.tsv',
+    output_file='output.tsv',
+    buckets=[2, 5, 10, 15],
+    samples_per_row=3,
+    max_debits_per_account=3,
+    min_date_threshold="20250321"  # Only include transactions after this date
+)
+
+
 
 import csv  # For reading and writing TSV files
 import random  # For randomly sampling combinations
