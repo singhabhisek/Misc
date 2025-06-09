@@ -1,3 +1,81 @@
+import random
+import csv
+from collections import defaultdict
+
+def get_bucket(count, buckets):
+    """Return the largest bucket that is <= count."""
+    valid = [b for b in sorted(buckets) if b <= count]
+    return valid[-1] if valid else None
+
+def generate_combinations_without_count(
+    input_file,
+    output_file,
+    sample_sizes=[2, 5, 10, 15],
+    min_date="20250321",
+    max_debits_per_account=3,
+    samples_per_row=3
+):
+    # Track unique debit cards used per account
+    account_debit_tracker = defaultdict(set)
+
+    with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
+        reader = csv.reader(infile, delimiter='\t')
+        writer = csv.writer(outfile, delimiter='\t')
+
+        # Optional header
+        writer.writerow(['account', 'debit', 'dates', 'amounts'])
+
+        for row in reader:
+            if len(row) != 5:
+                continue  # Skip malformed rows
+
+            account, debit, dates_str, amts_str, _ = row  # We ignore 'codes' column
+
+            dates = dates_str.split(',')
+            amts = amts_str.split(',')
+
+            if len(dates) != len(amts):
+                continue  # Mismatched lengths
+
+            # Filter based on date threshold
+            filtered = [(d, a) for d, a in zip(dates, amts) if d > min_date]
+            count = len(filtered)
+
+            if count <= 1:
+                continue  # Skip if not enough data after filtering
+
+            # Limit how many debit cards are used per account
+            if debit not in account_debit_tracker[account]:
+                if len(account_debit_tracker[account]) >= max_debits_per_account:
+                    continue  # Too many debit cards already used for this account
+                account_debit_tracker[account].add(debit)
+
+            bucket = get_bucket(count, sample_sizes)
+            if not bucket:
+                continue  # No valid bucket size found
+
+            # Generate multiple samples of the same bucket size
+            for _ in range(samples_per_row):
+                sample = random.sample(filtered, bucket)
+                sample_dates = ','.join([x[0] for x in sample])
+                sample_amts = ','.join([x[1] for x in sample])
+                writer.writerow([account, debit, sample_dates, sample_amts])
+
+
+
+generate_combinations_without_count(
+    input_file='input.tsv',
+    output_file='output.tsv',
+    sample_sizes=[2, 5, 10, 15],
+    min_date="20250321",
+    max_debits_per_account=3,
+    samples_per_row=3
+)
+
+
+-------------------------
+
+
 import csv
 import random
 from collections import defaultdict
