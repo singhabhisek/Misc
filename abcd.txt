@@ -1,3 +1,143 @@
+
+char* str_replace(const char* original, char old_char, char new_char) {
+    static char buffer[8192]; // Adjust size as needed
+    int i;
+
+    for (i = 0; original[i] != '\0' && i < sizeof(buffer) - 1; i++) {
+        buffer[i] = (original[i] == old_char) ? new_char : original[i];
+    }
+
+    buffer[i] = '\0';
+    return buffer;
+}
+
+
+char* original_json = lr_eval_string("{JsonParam}");
+char* modified_json = str_replace(original_json, '-', '_');
+
+lr_save_string(modified_json, "ModifiedJson");
+lr_output_message("Modified JSON: %s", lr_eval_string("{ModifiedJson}"));
+
+
+=================
+
+import requests
+import csv
+import xml.etree.ElementTree as ET
+from datetime import datetime
+import sys
+
+NAMESPACES = {
+    'soap-env': 'http://schemas.xmlsoap.org/soap/envelope/',
+    'ns0': 'http://example.com/ns'
+}
+
+API_URL = "https://your-api-endpoint.com/soap"
+
+def parse_date(date_str):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d')
+    except:
+        return datetime.min
+
+def main(input_csv, output_file):
+    # Prepare output file with header
+    with open(output_file, 'w', newline='') as out_file:
+        writer = csv.writer(out_file)
+        writer.writerow(['applicationdesc', 'AcctNumber', 'relationship', 'AssociatedAcct', 'cardsratus',
+                         'EffectiveDate', 'ExpiryDate', 'Address', 'Validity'])
+
+    # Read input accounts
+    with open(input_csv, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            acct_num = row['account_number'].strip()
+
+            # Prepare SOAP request
+            payload = f"""
+            <soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
+              <soap-env:Body>
+                <ns0:GetAccountDetails xmlns:ns0="http://example.com/ns">
+                  <ns0:AccountNumber>{acct_num}</ns0:AccountNumber>
+                </ns0:GetAccountDetails>
+              </soap-env:Body>
+            </soap-env:Envelope>
+            """
+
+            try:
+                response = requests.post(API_URL, data=payload, headers={'Content-Type': 'text/xml'})
+                response.raise_for_status()
+                root = ET.fromstring(response.text)
+
+                # Group by (AcctNumber, AssociatedAcct)
+                unique_debit_cards = {}
+
+                for detail in root.findall('.//ns0:AcctDetail', NAMESPACES):
+                    app_desc = detail.findtext('ns0:applicationdesc', '', NAMESPACES)
+                    if 'debit' not in app_desc.lower():
+                        continue
+
+                    acct_number = detail.findtext('ns0:AcctNumber', '', NAMESPACES)
+                    associated_acct = detail.findtext('ns0:ATMCardDetail/ns0:AssociatedAcct', '', NAMESPACES).strip()
+
+                    if not associated_acct:
+                        continue
+
+                    expiry_date_str = detail.findtext('ns0:ExpiryDate', '', NAMESPACES)
+                    expiry_date = parse_date(expiry_date_str)
+
+                    key = (acct_number, associated_acct)
+                    existing = unique_debit_cards.get(key)
+
+                    if not existing or expiry_date > existing['parsed_expiry']:
+                        unique_debit_cards[key] = {
+                            'applicationdesc': 'DEBIT CARD',
+                            'AcctNumber': acct_number,
+                            'relationship': detail.findtext('ns0:relationship', '', NAMESPACES),
+                            'AssociatedAcct': associated_acct,
+                            'cardsratus': detail.findtext('ns0:ATMCardDetail/ns0:cardsratus', '', NAMESPACES),
+                            'EffectiveDate': detail.findtext('ns0:EffectiveDate', '', NAMESPACES),
+                            'ExpiryDate': expiry_date_str,
+                            'Address': detail.findtext('ns0:Address', '', NAMESPACES),
+                            'Validity': detail.findtext('ns0:Validity', '', NAMESPACES),
+                            'parsed_expiry': expiry_date
+                        }
+
+                # Write unique records
+                with open(output_file, 'a', newline='') as out_file:
+                    writer = csv.writer(out_file)
+                    for record in unique_debit_cards.values():
+                        del record['parsed_expiry']
+                        writer.writerow(record.values())
+
+            except requests.RequestException as e:
+                print(f"Error for account {acct_num}: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python script1.py <input_csv> <output_file>")
+        sys.exit(1)
+
+    input_csv = sys.argv[1]
+    output_file = sys.argv[2]
+    main(input_csv, output_file)
+
+
+
+--
+import subprocess
+
+def run_script(script, input_file, output_file):
+    print(f"Running {script} with input: {input_file}, output: {output_file}")
+    subprocess.run(['python', script, input_file, output_file], check=True)
+
+if __name__ == "__main__":
+    run_script('script1.py', 'input_accounts.csv', 'output1.csv')
+    run_script('script2.py', 'output1.csv', 'output2.csv')
+    run_script('script3.py', 'output2.csv', 'output3.csv')
+    print("Workflow complete.")
+
+
 import random
 import csv
 from collections import defaultdict
