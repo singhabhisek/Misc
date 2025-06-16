@@ -1,3 +1,79 @@
+// Function to clean hyphens from specific date fields in a JSON string
+void CleanDatesInJson(const char *inputJson, char *outputJson, const char *dateKeys[], int numKeys) {
+    const char *src = inputJson;
+    char *dst = outputJson;
+    int inQuotes = 0;
+    int foundDateKey = 0;
+
+    while (*src != '\0') {
+        // Detect matching date key
+        for (int i = 0; i < numKeys; i++) {
+            size_t keyLen = strlen(dateKeys[i]);
+
+            if (!inQuotes && strncmp(src, dateKeys[i], keyLen) == 0 && src[keyLen] == '"') {
+                foundDateKey = 1;
+                break;
+            }
+        }
+
+        if (*src == '"') {
+            inQuotes = !inQuotes;
+            *dst++ = *src++;
+        }
+        else if (inQuotes && foundDateKey && *src == '-') {
+            *dst++ = ' ';
+            src++;
+        }
+        else {
+            *dst++ = *src++;
+
+            if (*(src - 1) == ',' || *(src - 1) == '}') {
+                foundDateKey = 0; // Reset flag at end of value
+            }
+        }
+    }
+
+    *dst = '\0'; // Null-terminate the output string
+}
+
+
+======================
+
+char rawJson[10000];
+char cleanedJson[10000];
+
+const char *dateKeys[] = {
+    "ReceivedMerchantDate",
+    "CardHolderDate",
+    "MerchantShipDate"
+};
+
+// Capture JSON response
+web_reg_save_param("FullJson",
+    "LB=",
+    "RB=",
+    "Search=Body",
+    LAST);
+
+web_custom_request("GetData",
+    "URL=http://example.com/api/get",
+    "Method=GET",
+    LAST);
+
+// Clean dates
+strcpy(rawJson, lr_eval_string("{FullJson}"));
+CleanDatesInJson(rawJson, cleanedJson, dateKeys, sizeof(dateKeys)/sizeof(dateKeys[0]));
+
+// Use cleaned JSON
+web_custom_request("PostData",
+    "URL=http://example.com/api/post",
+    "Method=POST",
+    "BodyBinary={cleanedJson}",
+    LAST);
+
+=============================
+
+
 #ifndef CLEAN_JSON_H
 #define CLEAN_JSON_H
 
