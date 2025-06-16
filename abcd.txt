@@ -1,3 +1,129 @@
+// Function that removes hyphens from specific date fields inside DisputeIntent blocks
+void CleanDisputeIntentDates(const char *inputJson, char *outputJson,
+                             const char *dateFields[], int numFields) {
+    const char *src = inputJson;    // Pointer to read input JSON
+    char *dst = outputJson;         // Pointer to write modified JSON
+
+    int inQuotes = 0;               // Flag: are we inside a string (inside quotes)?
+    int inDisputeIntent = 0;        // Flag: are we inside a DisputeIntent block?
+    int matchDateField = 0;         // Flag: did we match a known date field?
+
+    // Loop through every character in input JSON
+    while (*src != '\0') {
+        // Toggle inQuotes when we see a quote (")
+        if (*src == '"') {
+            inQuotes = !inQuotes;
+            *dst++ = *src++;
+            continue;
+        }
+
+        // If not inside quotes, check if we're entering a DisputeIntent block
+        if (!inQuotes && strncmp(src, "DisputeIntent", 13) == 0) {
+            inDisputeIntent = 1; // Mark that we're inside DisputeIntent
+        }
+
+        // If we're inside DisputeIntent and inside a quoted key
+        if (inDisputeIntent && inQuotes) {
+            // Check if this quoted field matches any known date key
+            for (int i = 0; i < numFields; i++) {
+                if (strncmp(src, dateFields[i], strlen(dateFields[i])) == 0) {
+                    matchDateField = 1; // Found a date field we're targeting
+                    break;
+                }
+            }
+        }
+
+        // If we're in DisputeIntent, in a date field, and the char is a hyphen
+        if (inDisputeIntent && matchDateField && *src == '-') {
+            *dst++ = ' ';  // Replace hyphen with space
+            src++;         // Skip original hyphen
+        } else {
+            *dst++ = *src; // Copy current character to output
+
+            // End of DisputeIntent block — reset flag
+            if (inDisputeIntent && *src == '}') {
+                inDisputeIntent = 0;
+                matchDateField = 0;
+            }
+
+            // Reset date field match at comma or close of block
+            if (*src == ',' || *src == '}') {
+                matchDateField = 0;
+            }
+
+            src++; // Move to next character
+        }
+    }
+
+    *dst = '\0'; // Null-terminate the final output string
+}
+
+
+
+-------
+
+
+Action()
+{
+    char rawJson[5000];     // Original JSON input
+    char cleanedJson[5000]; // Buffer for modified JSON output
+
+    // List of date field names to clean (remove hyphens from)
+    const char *dateFields[] = {
+        "ReceivedMerchantDate",
+        "MerchantShipDate"
+    };
+
+    // Sample JSON (as from your example)
+    strcpy(rawJson,
+        "{"
+        "\"AcctDetails\": {"
+        "  \"AcctBalance\": \"100\","
+        "  \"TrxList\": ["
+        "    {"
+        "      \"ARN\": \"2001\","
+        "      \"OpenDate\": \"2024-01-01\","
+        "      \"DisputeIntent\": {"
+        "        \"ReceivedMerchantDate\": \"2025-12-10\","
+        "        \"MerchantShipDate\": \"2025-12-10\""
+        "      }"
+        "    },"
+        "    {"
+        "      \"ARN\": \"2002\","
+        "      \"OpenDate\": \"2020-10-01\","
+        "      \"DisputeIntent\": {"
+        "        \"ReceivedMerchantDate\": \"2025-12-10\","
+        "        \"MerchantShipDate\": \"2025-12-10\""
+        "      }"
+        "    }"
+        "  ]"
+        "}"
+        "}"
+    );
+
+    // Show the original
+    lr_output_message("Original JSON:\n%s", rawJson);
+
+    // Call the cleaning function
+    CleanDisputeIntentDates(rawJson, cleanedJson, dateFields, sizeof(dateFields)/sizeof(dateFields[0]));
+
+    // Output the cleaned version
+    lr_output_message("Cleaned JSON:\n%s", cleanedJson);
+
+    // Use the cleaned JSON in next request
+    web_custom_request("SubmitCleanedJson",
+        "URL=http://example.com/api/next",
+        "Method=POST",
+        "Body={cleanedJson}",
+        LAST);
+
+    return 0;
+}
+
+
+
+
+
 // Function to clean hyphens from specific date fields in a JSON string
 void CleanDatesInJson(const char *inputJson, char *outputJson, const char *dateKeys[], int numKeys) {
     const char *src = inputJson;
