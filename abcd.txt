@@ -1,3 +1,100 @@
+#ifndef CLEAN_JSON_H
+#define CLEAN_JSON_H
+
+#include <string.h>
+#include <stdio.h>
+
+// Replaces hyphens with spaces in values of specified date keys in a JSON string
+void CleanDatesInJson(const char *inputJson, char *outputJson, const char *dateKeys[], int numKeys) {
+    const char *src = inputJson;
+    char *dst = outputJson;
+    int inQuotes = 0;
+    int foundDateKey = 0;
+
+    while (*src != '\0') {
+        // Detect matching date key
+        for (int i = 0; i < numKeys; i++) {
+            size_t keyLen = strlen(dateKeys[i]);
+
+            // Only check for keys outside of quotes to avoid false positives
+            if (!inQuotes && strncmp(src, dateKeys[i], keyLen) == 0 && src[keyLen] == '"') {
+                foundDateKey = 1;
+                break;
+            }
+        }
+
+        // Toggle quote tracking
+        if (*src == '"') {
+            inQuotes = !inQuotes;
+            *dst++ = *src++;
+        }
+        // Replace hyphen inside quoted value after key match
+        else if (inQuotes && foundDateKey && *src == '-') {
+            *dst++ = ' ';
+            src++;
+        }
+        else {
+            *dst++ = *src++;
+
+            // If value segment ends, reset the date key flag
+            if (*(src - 1) == ',' || *(src - 1) == '}') {
+                foundDateKey = 0;
+            }
+        }
+    }
+
+    *dst = '\0'; // Null-terminate output
+}
+
+#endif // CLEAN_JSON_H
+
+
+
+char rawJson[10000];
+char cleanedJson[10000];
+
+// Step 1: Save full JSON response
+web_reg_save_param("FullJson",
+    "LB=",
+    "RB=",
+    "Search=Body",
+    LAST);
+
+web_custom_request("GetTransactions",
+    "URL=http://example.com/api/transactions",
+    "Method=GET",
+    LAST);
+
+// Step 2: Evaluate and clean JSON
+strcpy(rawJson, lr_eval_string("{FullJson}"));
+
+// Define keys to clean
+const char *dateKeys[] = {
+    "ReceivedMerchantDate",
+    "CardHolderDate",
+    "MerchantShipDate"
+};
+
+// Call reusable function
+CleanDatesInJson(rawJson, cleanedJson, dateKeys, sizeof(dateKeys)/sizeof(dateKeys[0]));
+
+// Optional: Log cleaned output
+lr_output_message("Cleaned JSON:\n%s", cleanedJson);
+
+// Step 3: Use cleaned JSON as body in next request
+web_custom_request("PostCleanedJson",
+    "URL=http://example.com/api/nextstep",
+    "Method=POST",
+    "BodyBinary={cleanedJson}",
+    LAST);
+
+
+
+=================
+
+
+
+
 
 char* str_replace(const char* original, char old_char, char new_char) {
     static char buffer[8192]; // Adjust size as needed
