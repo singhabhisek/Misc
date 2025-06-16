@@ -1,3 +1,58 @@
+
+void CleanDisputeIntentDates(const char *inputJson, char *outputJson,
+                             const char *dateFields[], int numFields) {
+    const char *src = inputJson;
+    char *dst = outputJson;
+
+    int inQuotes = 0;
+    int inDisputeIntent = 0;
+    int matchDateField = 0;
+
+    while (*src != '\0') {
+        if (*src == '"') {
+            inQuotes = !inQuotes;
+            *dst++ = *src++;
+            continue;
+        }
+
+        if (!inQuotes && strncmp(src, "DisputeIntent", 13) == 0) {
+            inDisputeIntent = 1;
+        }
+
+        if (inDisputeIntent && inQuotes) {
+            for (int i = 0; i < numFields; i++) {
+                if (strncmp(src, dateFields[i], strlen(dateFields[i])) == 0) {
+                    matchDateField = 1;
+                    break;
+                }
+            }
+        }
+
+        if (inDisputeIntent && matchDateField && *src == '-') {
+            src++;  // Skip hyphen (do not add to output)
+        } else {
+            *dst++ = *src;
+
+            if (inDisputeIntent && *src == '}') {
+                inDisputeIntent = 0;
+                matchDateField = 0;
+            }
+
+            if (*src == ',' || *src == '}') {
+                matchDateField = 0;
+            }
+
+            src++;
+        }
+    }
+
+    *dst = '\0'; // End the cleaned string
+}
+
+
+===========
+
+
 // Function that removes hyphens from specific date fields inside DisputeIntent blocks
 void CleanDisputeIntentDates(const char *inputJson, char *outputJson,
                              const char *dateFields[], int numFields) {
