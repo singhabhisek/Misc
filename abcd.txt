@@ -1,3 +1,213 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// This array defines all the JSON keys that are expected to contain date strings
+// with hyphens (e.g., "2024-01-01") that we want to clean to "20240101".
+const char *dateKeys[] = {
+    "OpenDate",
+    "ReceivedMerchantDate",
+    "MerchantShipDate",
+    "CardHolderDate"
+};
+
+// Number of keys in the array (used in the loop below)
+const int numKeys = sizeof(dateKeys) / sizeof(dateKeys[0]);
+
+// This function receives a JSON string (inputJson), scans it for specific date fields,
+// and returns a new JSON string with hyphens removed from those date values.
+char *removeHyphensFromDates(const char *inputJson) {
+    if (!inputJson) return NULL; // sanity check for null input
+
+    size_t inputLen = strlen(inputJson); // get the input length
+    // Allocate memory for the output string. We are only removing characters,
+    // so the output will never be longer than the input.
+    char *outputJson = (char *)malloc(inputLen + 1); // +1 for null-terminator
+    if (!outputJson) return NULL; // check for malloc failure
+
+    const char *src = inputJson;   // Pointer to read from input
+    char *dst = outputJson;        // Pointer to write to output
+
+    // Loop through the entire input string character by character
+    while (*src) {
+        // We're only interested in JSON keys, which begin with a double-quote
+        if (*src == '"') {
+            int matchedKeyIndex = -1; // Track whether we match one of our target date keys
+
+            // Loop through each date key and compare it to the current position
+            for (int i = 0; i < numKeys; i++) {
+                size_t keyLen = strlen(dateKeys[i]);
+
+                // We're checking for the exact pattern: "KEY":" — i.e., a quote,
+                // followed by the key name, followed by '":"'.
+                // NOTE: if your JSON formatting uses `"KEY" : "value"` (with spaces),
+                // you may need to update this logic to skip whitespace.
+                if (strncmp(src + 1, dateKeys[i], keyLen) == 0 &&
+                    strncmp(src + 1 + keyLen, "\":\"", 3) == 0) {
+                    matchedKeyIndex = i;
+                    break; // no need to check further once matched
+                }
+            }
+
+            // If a date key was matched (like "OpenDate")
+            if (matchedKeyIndex != -1) {
+                size_t keyLen = strlen(dateKeys[matchedKeyIndex]);
+
+                // Copy the key + colon + quote to output exactly as-is
+                // This is the string: "KEY":"
+                strncpy(dst, src, keyLen + 4);
+                dst += keyLen + 4;
+                src += keyLen + 4;
+
+                // Now, we are inside the value (like "2024-01-01")
+                // Copy character by character, but skip hyphens
+                while (*src && *src != '"') { // Stop when we reach the closing quote
+                    if (*src != '-') {
+                        *dst++ = *src; // Copy everything except '-'
+                    }
+                    src++;
+                }
+
+                // After value ends (at closing quote), copy the quote too
+                if (*src == '"') {
+                    *dst++ = *src++;
+                }
+
+                continue; // Go back to the main loop
+            }
+        }
+
+        // If it's not one of the target date fields, just copy the character as-is
+        *dst++ = *src++;
+    }
+
+    *dst = '\0'; // Null-terminate the output string
+    return outputJson; // Return the cleaned-up JSON
+}
+
+
+
+-==============
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// List of date keys to search in the JSON
+const char *dateKeys[] = {
+    "OpenDate",
+    "ReceivedMerchantDate",
+    "MerchantShipDate",
+    "CardHolderDate"
+};
+const int numKeys = sizeof(dateKeys) / sizeof(dateKeys[0]);
+
+char *removeHyphensFromDates(const char *inputJson) {
+    if (!inputJson) return NULL;
+
+    size_t inputLen = strlen(inputJson);
+    // Allocate output buffer - input length + 1 is enough since we only remove chars
+    char *outputJson = (char *)malloc(inputLen + 1);
+    if (!outputJson) return NULL;
+
+    const char *src = inputJson;   // input pointer
+    char *dst = outputJson;        // output pointer
+
+    while (*src) {
+        // Check if current char is a quote, signaling possible start of a key
+        if (*src == '"') {
+            int matchedKeyIndex = -1;
+            // Check all date keys
+            for (int i = 0; i < numKeys; i++) {
+                size_t keyLen = strlen(dateKeys[i]);
+                // Check if substring after quote matches key, and next chars are '": "'
+                if (strncmp(src + 1, dateKeys[i], keyLen) == 0 &&
+                    strncmp(src + 1 + keyLen, "\":\"", 3) == 0) {
+                    matchedKeyIndex = i;
+                    break;
+                }
+            }
+
+            if (matchedKeyIndex != -1) {
+                // Copy the key and '":"'
+                size_t keyLen = strlen(dateKeys[matchedKeyIndex]);
+                strncpy(dst, src, keyLen + 4); // quote + key + '":"'
+                dst += keyLen + 4;
+                src += keyLen + 4;
+
+                // Now remove hyphens inside the date value until closing quote
+                while (*src && *src != '"') {
+                    if (*src != '-') {
+                        *dst++ = *src; // copy non-hyphen characters
+                    }
+                    src++;
+                }
+                // Copy the closing quote
+                if (*src == '"') {
+                    *dst++ = *src++;
+                }
+                continue; // continue main loop
+            }
+        }
+        // Default: copy current char
+        *dst++ = *src++;
+    }
+
+    *dst = '\0'; // null-terminate output string
+    return outputJson;
+}
+
+
+
+
+int main() {
+    const char *jsonInput = "{\"AcctDetails\":{\"AcctBalance\":\"100\",\"TrxList\":[{\"ARN\":\"2001\",\"OpenDate\":\"2024-01-01\",\"DisputeIntent\":{\"ReceivedMerchantDate\":\"2025-12-10\",\"MerchantShipDate\":\"2025-12-11\"}},{\"ARN\":\"2002\",\"OpenDate\":\"2020-10-01\",\"DisputeIntent\":{\"ReceivedMerchantDate\":\"2023-05-10\",\"MerchantShipDate\":\"2023-05-11\",\"CardHolderDate\":\"2023-05-12\"}}]}}";
+
+    char *cleanJson = removeHyphensFromDates(jsonInput);
+    if (cleanJson) {
+        printf("Cleaned JSON:\n%s\n", cleanJson);
+        free(cleanJson);
+    } else {
+        printf("Error processing JSON.\n");
+    }
+
+    return 0;
+}
+
+
+
+// Assume this is already correlated using web_reg_save_param_json
+web_reg_save_param("response_json",
+    "LB=",
+    "RB=",
+    "Search=Body",
+    LAST);
+
+// After web request
+web_url("GetDisputeData", ...);
+
+// Evaluate JSON and clean it
+const char *jsonInput = lr_eval_string("{response_json}");
+char *cleanedJson = removeHyphensFromDates(jsonInput);
+
+if (cleanedJson) {
+    // Use cleanedJson in next request
+    lr_save_string(cleanedJson, "cleaned_json");
+
+    // Example use in next request
+    web_custom_request("PostCleaned",
+        "Body={cleaned_json}",
+        ...
+        LAST);
+
+    free(cleanedJson);
+} else {
+    lr_error_message("Failed to clean JSON");
+}
+
+
+
 Sub CleanAndRunAll()
     Dim ws As Worksheet
     Dim keepSheetName As String
