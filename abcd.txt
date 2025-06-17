@@ -1,3 +1,231 @@
+/**
+ * Removes hyphens from specific date fields in a JSON string.
+ * Input: originalJson (input JSON string)
+ * Output: cleanedJson (will contain cleaned result)
+ * Parameters:
+ *   dateKeys[]: array of date field names to target
+ *   numKeys: number of keys in the array
+ */
+void RemoveHyphensFromDates(const char *originalJson, char **cleanedJson,
+                            const char *dateKeys[], int numKeys)
+{
+    int inputLen = strlen(originalJson);
+    char *result = (char *)malloc(inputLen * 2); // double size buffer just in case
+    if (!result) {
+        lr_error_message("Memory allocation failed for cleanedJson.");
+        *cleanedJson = NULL;
+        return;
+    }
+
+    const char *src = originalJson;
+    char *dst = result;
+
+    int inQuotes = 0;
+    int matchingKey = 0;
+
+    while (*src != '\0') {
+        // Toggle quote flag
+        if (*src == '"') {
+            inQuotes = !inQuotes;
+            *dst++ = *src++;
+            continue;
+        }
+
+        if (inQuotes) {
+            matchingKey = 0;
+            for (int i = 0; i < numKeys; i++) {
+                size_t keyLen = strlen(dateKeys[i]);
+                if (strncmp(src, dateKeys[i], keyLen) == 0 && src[keyLen] == '"') {
+                    matchingKey = 1;
+                    strncpy(dst, src, keyLen);
+                    dst += keyLen;
+                    src += keyLen;
+                    *dst++ = *src++; // trailing quote
+                    break;
+                }
+            }
+
+            if (matchingKey) {
+                // Move to next quote (start of value)
+                while (*src && *src != '"') {
+                    *dst++ = *src++;
+                }
+
+                if (*src == '"') {
+                    *dst++ = *src++; // opening quote
+                    // Copy value, skip hyphens
+                    while (*src && *src != '"') {
+                        if (*src != '-') {
+                            *dst++ = *src;
+                        }
+                        src++;
+                    }
+
+                    if (*src == '"') {
+                        *dst++ = *src++; // closing quote
+                    }
+                }
+                continue;
+            }
+        }
+
+        *dst++ = *src++;
+    }
+
+    *dst = '\0';
+    *cleanedJson = result;
+}
+
+
+--
+Action()
+{
+    const char *responseJson = lr_eval_string("{responseParam}"); // Replace with your param
+    const char *dateKeys[] = {
+        "ReceivedMerchantDate",
+        "MerchantShipDate",
+        "CardHolderDate",
+        "OpenDate"
+    };
+
+    char *cleanedJson = NULL;
+
+    RemoveHyphensFromDates(responseJson, &cleanedJson,
+        dateKeys, sizeof(dateKeys) / sizeof(dateKeys[0]));
+
+    if (cleanedJson != NULL) {
+        lr_output_message("Cleaned JSON: %.1000s", cleanedJson);
+
+        // Optional: save as parameter
+        lr_save_string(cleanedJson, "CleanedJson");
+
+        // Use in web_custom_request if needed
+        web_custom_request("SubmitCleaned",
+            "URL=http://example.com/endpoint",
+            "Method=POST",
+            "Body={CleanedJson}",
+            LAST);
+
+        free(cleanedJson); // Always free
+    }
+
+    return 0;
+}
+
+--
+
+
+
+Action()
+{
+    char rawJson[5000];
+    char cleanedJson[5000];
+
+    const char *dateFields[] = {
+        "ReceivedMerchantDate",
+        "MerchantShipDate",
+        "CardHolderDate",
+        "OpenDate"
+    };
+
+    strcpy(rawJson,
+        "{"
+        "\"AcctDetails\": {"
+        "  \"AcctBalance\": \"100\","
+        "  \"TrxList\": ["
+        "    {"
+        "      \"ARN\": \"2001\","
+        "      \"OpenDate\": \"2024-01-01\","
+        "      \"DisputeIntent\": {"
+        "        \"ReceivedMerchantDate\": \"2025-12-10\","
+        "        \"MerchantShipDate\": \"2025-12-10\""
+        "      }"
+        "    },"
+        "    {"
+        "      \"ARN\": \"2002\","
+        "      \"OpenDate\": \"2020-10-01\","
+        "      \"DisputeIntent\": {"
+        "        \"ReceivedMerchantDate\": \"2025-12-10\","
+        "        \"MerchantShipDate\": \"2025-12-10\""
+        "      }"
+        "    }"
+        "  ]"
+        "}"
+        "}"
+    );
+
+    lr_output_message("Before:\n%s", rawJson);
+
+    RemoveHyphensFromDateFields(rawJson, cleanedJson,
+        dateFields, sizeof(dateFields)/sizeof(dateFields[0]));
+
+    lr_output_message("After:\n%s", cleanedJson);
+
+    // Optionally use cleaned JSON in web request
+    web_custom_request("SubmitRequest",
+        "URL=http://example.com/api",
+        "Method=POST",
+        "Body={cleanedJson}",
+        LAST);
+
+    return 0;
+}
+
+
+================
+Action()
+{
+    // Assume responseBodyParam contains your JSON (saved from web request)
+    const char *responseJson = lr_eval_string("{responseBodyParam}");
+    int len = strlen(responseJson);
+
+    // Dynamically allocate buffers
+    char *rawJson = (char *)malloc(len + 1);
+    char *cleanedJson = (char *)malloc(len + 1);
+
+    if (!rawJson || !cleanedJson) {
+        lr_error_message("Memory allocation failed.");
+        return -1;
+    }
+
+    strcpy(rawJson, responseJson);
+
+    const char *dateFields[] = {
+        "ReceivedMerchantDate",
+        "MerchantShipDate",
+        "CardHolderDate",
+        "OpenDate"
+    };
+
+    RemoveHyphensFromDateFields(rawJson, cleanedJson,
+        dateFields, sizeof(dateFields) / sizeof(dateFields[0]));
+
+    lr_output_message("Cleaned JSON:\n%.1000s", cleanedJson); // Limit print
+
+    // Save to parameter if needed
+    lr_save_string(cleanedJson, "CleanedJson");
+
+    // Use cleaned JSON in request
+    web_custom_request("PostCleanedJson",
+        "URL=http://example.com/api",
+        "Method=POST",
+        "Body={CleanedJson}",
+        LAST);
+
+    free(rawJson);
+    free(cleanedJson);
+
+    return 0;
+}
+
+
+=================
+
+
+
+
+
+
 
 void CleanDisputeIntentDates(const char *inputJson, char *outputJson,
                              const char *dateFields[], int numFields) {
