@@ -2,6 +2,83 @@ void RemoveHyphensFromDates(const char *originalJson, char **cleanedJson,
                             const char *dateKeys[], int numKeys)
 {
     int inputLen = strlen(originalJson);
+    char *result = (char *)malloc(inputLen * 2); // allocate enough space
+    if (!result) {
+        lr_error_message("Memory allocation failed for cleanedJson.");
+        *cleanedJson = NULL;
+        return;
+    }
+
+    // Precompute lengths of keys
+    size_t *keyLens = (size_t *)malloc(numKeys * sizeof(size_t));
+    if (!keyLens) {
+        free(result);
+        lr_error_message("Memory allocation failed for key lens.");
+        *cleanedJson = NULL;
+        return;
+    }
+    for (int i = 0; i < numKeys; i++) {
+        keyLens[i] = strlen(dateKeys[i]);
+    }
+
+    const char *src = originalJson;
+    char *dst = result;
+
+    while (*src != '\0') {
+        if (*src == '"') {
+            int matched = 0;
+
+            for (int i = 0; i < numKeys; i++) {
+                size_t keyLen = keyLens[i];
+
+                // Check if current position matches: "KeyName": "
+                if (strncmp(src + 1, dateKeys[i], keyLen) == 0 &&
+                    strncmp(src + 1 + keyLen, "\": \"", 4) == 0) 
+                {
+                    // Copy key + '": "'
+                    strncpy(dst, src, keyLen + 5);
+                    dst += keyLen + 5;
+                    src += keyLen + 5;
+
+                    // Copy value skipping hyphens
+                    while (*src && *src != '"') {
+                        if (*src != '-') {
+                            *dst++ = *src;
+                        }
+                        src++;
+                    }
+
+                    // Copy closing quote
+                    if (*src == '"') {
+                        *dst++ = *src++;
+                    }
+
+                    matched = 1;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                *dst++ = *src++;
+            }
+        } else {
+            *dst++ = *src++;
+        }
+    }
+
+    *dst = '\0';
+    *cleanedJson = result;
+    free(keyLens);
+}
+
+
+===============
+
+
+void RemoveHyphensFromDates(const char *originalJson, char **cleanedJson,
+                            const char *dateKeys[], int numKeys)
+{
+    int inputLen = strlen(originalJson);
     char *result = (char *)malloc(inputLen * 2); // Allocate extra space
     if (!result) {
         lr_error_message("Memory allocation failed for cleanedJson.");
