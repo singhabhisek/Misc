@@ -1,3 +1,59 @@
+void RemoveHyphensFromDates(const char *originalJson, char **cleanedJson,
+                            const char *dateKeys[], int numKeys)
+{
+    int inputLen = strlen(originalJson);
+    char *result = (char *)malloc(inputLen * 2); // Allocate extra space
+    if (!result) {
+        lr_error_message("Memory allocation failed for cleanedJson.");
+        *cleanedJson = NULL;
+        return;
+    }
+
+    const char *src = originalJson;
+    char *dst = result;
+
+    while (*src != '\0') {
+        int matched = 0;
+
+        for (int i = 0; i < numKeys; i++) {
+            size_t keyLen = strlen(dateKeys[i]);
+
+            if (strncmp(src, "\"", 1) == 0 &&
+                strncmp(src + 1, dateKeys[i], keyLen) == 0 &&
+                strncmp(src + 1 + keyLen, "\": \"", 4) == 0) {
+
+                // Match found: copy key and formatting
+                strncpy(dst, src, keyLen + 5); // includes quote, key, ":
+                dst += keyLen + 5;
+                src += keyLen + 5;
+
+                // Copy value, skipping hyphens
+                while (*src && *src != '"') {
+                    if (*src != '-') {
+                        *dst++ = *src;
+                    }
+                    src++;
+                }
+
+                // Copy closing quote
+                if (*src == '"') {
+                    *dst++ = *src++;
+                }
+
+                matched = 1;
+                break;
+            }
+        }
+
+        if (!matched) {
+            *dst++ = *src++;
+        }
+    }
+
+    *dst = '\0';
+    *cleanedJson = result;
+}
+
 /**
  * Removes hyphens from specific date fields in a JSON string.
  * Input: originalJson (input JSON string)
