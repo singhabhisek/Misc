@@ -1,3 +1,286 @@
+Sub CleanAndRunAll()
+    Dim ws As Worksheet
+    Dim keepSheetName As String
+    Dim shName As String
+    Dim i As Long
+    
+    keepSheetName = "data"
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    ' Delete all sheets except the one named "data"
+    For i = ThisWorkbook.Worksheets.count To 1 Step -1
+        Set ws = ThisWorkbook.Worksheets(i)
+        shName = LCase(ws.Name)
+        If shName <> LCase(keepSheetName) Then
+            ws.Delete
+        End If
+    Next i
+    
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    
+    ' Call your macros in order
+    Call SummarizeTransactions
+    Call ExpandLargeTransactions
+    Call CreateTransposedSheets
+    
+    MsgBox "All done! Sheets cleaned and macros executed.", vbInformation
+End Sub
+
+Sub SummarizeTransactions()
+    Dim wsData As Worksheet, wsOut As Worksheet
+    Dim dict As Object, key As Variant
+    Dim i As Long, lastRow As Long
+    Dim acct As String, card As String
+    Dim trxDate As String, trxAmt As Double
+    Dim tempArray As Variant
+    Dim parts As Variant
+
+    ' Set worksheets
+    Set wsData = Worksheets("Data") ' Adjust if needed
+    Set wsOut = Worksheets.Add
+    wsOut.Name = "Summary"
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    lastRow = wsData.Cells(wsData.Rows.count, 1).End(xlUp).Row
+
+    ' Build dictionary
+    For i = 2 To lastRow
+        acct = wsData.Cells(i, 2).Value
+        card = wsData.Cells(i, 3).Value
+        trxDate = wsData.Cells(i, 4).Text
+        trxAmt = wsData.Cells(i, 5).Value
+        key = acct & "|" & card
+
+        If Not dict.exists(key) Then
+            dict(key) = Array("", "", 0)
+        End If
+
+        tempArray = dict(key)
+        tempArray(0) = tempArray(0) & trxDate & ", "
+        tempArray(1) = tempArray(1) & trxAmt & ", "
+        tempArray(2) = tempArray(2) + 1
+        dict(key) = tempArray
+    Next i
+
+    ' Write headers
+    With wsOut
+        .Cells(1, 1).Value = "acctnumber"
+        .Cells(1, 2).Value = "cardnumber"
+        .Cells(1, 3).Value = "trxdates"
+        .Cells(1, 4).Value = "trxamts"
+        .Cells(1, 5).Value = "count_trxdates"
+        
+        .Columns("A:D").NumberFormat = "@" ' Format dates and amounts as text
+    End With
+
+    ' Output results
+    i = 2
+    For Each key In dict.Keys
+        parts = Split(key, "|")
+        tempArray = dict(key)
+
+        wsOut.Cells(i, 1).Value = parts(0)
+        wsOut.Cells(i, 2).Value = parts(1)
+        wsOut.Cells(i, 3).Value = Left(tempArray(0), Len(tempArray(0)) - 2)
+        wsOut.Cells(i, 4).Value = Left(tempArray(1), Len(tempArray(1)) - 2)
+        wsOut.Cells(i, 5).Value = tempArray(2)
+        i = i + 1
+    Next key
+End Sub
+
+
+Sub ExpandLargeTransactions()
+    Dim wsSrc As Worksheet, wsOut As Worksheet
+    Dim lastRow As Long, i As Long, outputRow As Long
+    Dim maxTrx As Long: maxTrx = 5 ' Configurable max transactions per row
+    Dim sliceSizes As Variant: sliceSizes = Array(2, 4, 5, 10)
+    Dim datesArr As Variant, amtsArr As Variant
+    Dim numTrx As Long, j As Long, setNum As Long
+    Dim shuffledPairs As Variant
+    Dim numSets As Long: numSets = 2 ' Number of slice sets to generate per row
+
+    Set wsSrc = Worksheets("Summary")
+    Set wsOut = Worksheets.Add
+    wsOut.Name = "Expanded"
+
+    ' Output headers
+    With wsOut
+        .Cells(1, 1).Value = "acctnumber"
+        .Cells(1, 2).Value = "cardnumber"
+        .Cells(1, 3).Value = "trxdates"
+        .Cells(1, 4).Value = "trxamts"
+        .Cells(1, 5).Value = "count_trxdates"
+        .Cells(1, 6).Value = "set_number" ' New column to track which set
+    End With
+    outputRow = 2
+
+    lastRow = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+
+    Randomize ' Initialize random number generator once
+
+    For i = 2 To lastRow
+        numTrx = wsSrc.Cells(i, 5).Value
+        datesArr = Split(wsSrc.Cells(i, 3).Value, ",")
+        amtsArr = Split(wsSrc.Cells(i, 4).Value, ",")
+
+        If numTrx <= maxTrx Then
+            ' Just generate numSets copies of whole shuffled sets
+            For setNum = 1 To numSets
+                shuffledPairs = PairAndShuffle(datesArr, amtsArr)
+                
+                wsOut.Cells(outputRow, 1).Value = wsSrc.Cells(i, 1).Value
+                wsOut.Cells(outputRow, 2).Value = wsSrc.Cells(i, 2).Value
+                wsOut.Cells(outputRow, 3).Value = Join(SliceArray(shuffledPairs, numTrx, 0), ", ")
+                wsOut.Cells(outputRow, 4).Value = Join(SliceArray(shuffledPairs, numTrx, 1), ", ")
+                wsOut.Cells(outputRow, 5).Value = numTrx
+                wsOut.Cells(outputRow, 6).Value = setNum
+                outputRow = outputRow + 1
+            Next setNum
+        Else
+            ' For each set, generate all slices with independent shuffles
+            For setNum = 1 To numSets
+                For j = LBound(sliceSizes) To UBound(sliceSizes)
+                    If sliceSizes(j) <= numTrx Then
+                        shuffledPairs = PairAndShuffle(datesArr, amtsArr)
+                        
+                        wsOut.Cells(outputRow, 1).Value = wsSrc.Cells(i, 1).Value
+                        wsOut.Cells(outputRow, 2).Value = wsSrc.Cells(i, 2).Value
+                        wsOut.Cells(outputRow, 3).Value = Join(SliceArray(shuffledPairs, sliceSizes(j), 0), ", ")
+                        wsOut.Cells(outputRow, 4).Value = Join(SliceArray(shuffledPairs, sliceSizes(j), 1), ", ")
+                        wsOut.Cells(outputRow, 5).Value = sliceSizes(j)
+                        wsOut.Cells(outputRow, 6).Value = setNum
+                        outputRow = outputRow + 1
+                    End If
+                Next j
+            Next setNum
+        End If
+    Next i
+End Sub
+
+' PairAndShuffle and SliceArray functions remain the same as before
+
+
+' Pairs dates and amounts, then shuffles the pairs randomly
+Function PairAndShuffle(datesArr As Variant, amtsArr As Variant) As Variant
+    Dim n As Long, i As Long
+    n = UBound(datesArr)
+    Dim tempPairs() As Variant
+    ReDim tempPairs(0 To n, 0 To 1)
+
+    For i = 0 To n
+        tempPairs(i, 0) = Trim(datesArr(i))
+        tempPairs(i, 1) = Trim(amtsArr(i))
+    Next i
+
+    Dim j As Long, tmp0 As Variant, tmp1 As Variant
+    For i = n To 1 Step -1
+        j = Int(Rnd() * (i + 1))
+        tmp0 = tempPairs(i, 0): tmp1 = tempPairs(i, 1)
+        tempPairs(i, 0) = tempPairs(j, 0): tempPairs(i, 1) = tempPairs(j, 1)
+        tempPairs(j, 0) = tmp0: tempPairs(j, 1) = tmp1
+    Next i
+
+    PairAndShuffle = tempPairs
+End Function
+
+' Extracts either dates or amounts from the shuffled pairs array
+Function SliceArray(pairs As Variant, ByVal count As Long, colIndex As Integer) As Variant
+    Dim result() As String, i As Long
+    ReDim result(0 To count - 1)
+    For i = 0 To count - 1
+        result(i) = pairs(i, colIndex)
+    Next i
+    SliceArray = result
+End Function
+
+Sub CreateTransposedSheets()
+    Dim wsSrc As Worksheet
+    Dim wsAcct As Worksheet, wsCard As Worksheet, wsDates As Worksheet, wsAmt As Worksheet
+    Dim lastRow As Long, i As Long
+    Dim headerPrefix As String
+    Dim dataRange As Range
+    Dim arrAcct As Variant, arrCard As Variant, arrDates As Variant, arrAmt As Variant
+    
+    Set wsSrc = Worksheets("Expanded") ' Change if your source sheet is named differently
+    
+    lastRow = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+    If lastRow < 2 Then
+        MsgBox "No data found in 'Expanded' sheet.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Read the columns into arrays (excluding header row)
+    arrAcct = Application.Transpose(wsSrc.Range(wsSrc.Cells(2, 1), wsSrc.Cells(lastRow, 1)).Value)
+    arrCard = Application.Transpose(wsSrc.Range(wsSrc.Cells(2, 2), wsSrc.Cells(lastRow, 2)).Value)
+    arrDates = Application.Transpose(wsSrc.Range(wsSrc.Cells(2, 3), wsSrc.Cells(lastRow, 3)).Value)
+    arrAmt = Application.Transpose(wsSrc.Range(wsSrc.Cells(2, 4), wsSrc.Cells(lastRow, 4)).Value)
+    
+    ' Create or clear the 4 sheets
+    Set wsAcct = CreateOrClearSheet("acct")
+    Set wsCard = CreateOrClearSheet("cardnumber")
+    Set wsDates = CreateOrClearSheet("trxdates")
+    Set wsAmt = CreateOrClearSheet("trxAmt")
+    
+    ' Write headers and data for acct sheet
+    headerPrefix = "AccountNumber"
+    Call WriteHeadersAndData(wsAcct, headerPrefix, arrAcct)
+    
+    ' Write headers and data for cardnumber sheet
+    headerPrefix = "CardNumber"
+    Call WriteHeadersAndData(wsCard, headerPrefix, arrCard)
+    
+    ' Write headers and data for trxdates sheet
+    headerPrefix = "TrxDate"
+    Call WriteHeadersAndData(wsDates, headerPrefix, arrDates)
+    
+    ' Write headers and data for trxAmt sheet
+    headerPrefix = "TrxAmt"
+    Call WriteHeadersAndData(wsAmt, headerPrefix, arrAmt)
+    
+    MsgBox "Transposed sheets created successfully!", vbInformation
+End Sub
+
+' Helper function to create a new sheet or clear existing one
+Function CreateOrClearSheet(sheetName As String) As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = Worksheets(sheetName)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = Worksheets.Add(After:=Worksheets(Worksheets.count))
+        ws.Name = sheetName
+    Else
+        ws.Cells.Clear
+    End If
+    Set CreateOrClearSheet = ws
+End Function
+
+' Helper to write headers and transposed data starting at row 1, col B (2)
+Sub WriteHeadersAndData(ws As Worksheet, headerPrefix As String, dataArr As Variant)
+    Dim i As Long, colCount As Long
+    
+    colCount = UBound(dataArr)
+    
+    ' Write headers in row 1 starting from column 2 (B)
+    For i = 1 To colCount
+        ws.Cells(1, i + 1).Value = headerPrefix & i
+    Next i
+    
+    ' Write data in row 2 starting from column 2 (B)
+    For i = 1 To colCount
+        ws.Cells(2, i + 1).Value = dataArr(i)
+    Next i
+End Sub
+
+
+
+
+======================
+
 void RemoveHyphensFromDates(const char *originalJson, char **cleanedJson,
                             const char *dateKeys[], int numKeys)
 {
