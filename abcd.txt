@@ -1,3 +1,41 @@
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+
+public class ReplaceDateHyphensUniversal {
+
+    public static void main(String[] args) {
+        String inputFile = "data.json";
+        String outputFile = "updated_data.json";
+
+        // Fields where you want to remove hyphens from date values
+        String[] dateFields = {
+            "OpenDate", "ReceivedMerchantDate", "MerchantShipDate", "CardHolderDate"
+        };
+
+        try {
+            String content = new String(Files.readAllBytes(Paths.get(inputFile)), StandardCharsets.UTF_8);
+
+            // Process each field: match "FieldName": "yyyy-mm-dd"
+            for (String field : dateFields) {
+                String regex = "(\"" + field + "\"\\s*:\\s*\")([0-9]{4})-([0-9]{2})-([0-9]{2})(\")";
+                String replacement = "$1$2$3$4$5";  // e.g., "2024-01-01" → "20240101"
+                content = content.replaceAll(regex, replacement);
+            }
+
+            Files.write(Paths.get(outputFile), content.getBytes(StandardCharsets.UTF_8));
+            System.out.println("✅ Dates cleaned successfully in: " + outputFile);
+
+        } catch (IOException e) {
+            System.err.println("❌ File error: " + e.getMessage());
+        }
+    }
+}
+
+===
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
