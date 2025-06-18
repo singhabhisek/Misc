@@ -1,3 +1,52 @@
+Sub CreateTransposedTabs_NoSplitDatesAmt()
+    Dim wsSource As Worksheet
+    Dim wsAcct As Worksheet, wsCard As Worksheet, wsDates As Worksheet, wsAmt As Worksheet
+    Dim lastRow As Long, i As Long
+    
+    Set wsSource = ThisWorkbook.Sheets("Sheet1") ' Change if needed
+    lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
+    
+    ' Delete old sheets if exist
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    Sheets("acct").Delete
+    Sheets("cardnumber").Delete
+    Sheets("trxdates").Delete
+    Sheets("trxAmt").Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+    
+    ' Create new sheets
+    Set wsAcct = Sheets.Add(After:=Sheets(Sheets.Count)): wsAcct.Name = "acct"
+    Set wsCard = Sheets.Add(After:=Sheets(Sheets.Count)): wsCard.Name = "cardnumber"
+    Set wsDates = Sheets.Add(After:=Sheets(Sheets.Count)): wsDates.Name = "trxdates"
+    Set wsAmt = Sheets.Add(After:=Sheets(Sheets.Count)): wsAmt.Name = "trxAmt"
+    
+    ' Loop through each row of source data and transpose
+    For i = 2 To lastRow
+        ' Account sheet
+        wsAcct.Cells(1, i - 1).Value = "AccountNumber" & (i - 1)
+        wsAcct.Cells(2, i - 1).Value = wsSource.Cells(i, 1).Value
+        
+        ' Cardnumber sheet
+        wsCard.Cells(1, i - 1).Value = "CardNumber" & (i - 1)
+        wsCard.Cells(2, i - 1).Value = wsSource.Cells(i, 2).Value
+        
+        ' trxdates sheet — keep comma-separated in one cell
+        wsDates.Cells(1, i - 1).Value = "TrxDate" & (i - 1)
+        wsDates.Cells(2, i - 1).Value = wsSource.Cells(i, 3).Value
+        
+        ' trxAmt sheet — keep comma-separated in one cell
+        wsAmt.Cells(1, i - 1).Value = "TrxAmt" & (i - 1)
+        wsAmt.Cells(2, i - 1).Value = wsSource.Cells(i, 4).Value
+    Next i
+End Sub
+
+
+
+-----------------
+
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
