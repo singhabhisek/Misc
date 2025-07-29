@@ -1,0 +1,611 @@
+
+
+#URL_START
+https://api.example.com/data
+#URL_END
+
+#HEADER_START
+Content-Type: application/xml
+amazonXID: {{api1.amazonXID}}
+Authorization: Bearer {{api1.token}}
+#HEADER_END
+
+#BODY_START
+<Request>
+    <AccountID>{{api2.AccountID}}</AccountID>
+    <SessionToken>{{api1.token}}</SessionToken>
+</Request>
+#BODY_END
+
+#EXTRACT_START
+dataID: xml:/Request/Response/DataID
+#EXTRACT_END
+
+#URL_START
+https://api.example.com/session
+#URL_END
+
+#HEADER_START
+Content-Type: application/json
+Authorization: Bearer {{api1.token}}
+#HEADER_END
+
+#BODY_START
+{
+  "session_start": true
+}
+#BODY_END
+
+#EXTRACT_START
+api2.token: json:token
+api2.AccountID: json:AccountID
+#EXTRACT_END
+
+
+==========================
+
+from flask import Flask, render_template, request, jsonify
+import requests
+import re
+
+app = Flask(__name__)
+
+def parse_template(text):
+    """Extract URL, headers, and body from the template text using markers."""
+    url_match = re.search(r"#URL_START\s*(.*?)\s*#URL_END", text, re.DOTALL)
+    headers_match = re.search(r"#HEADER_START\s*(.*?)\s*#HEADER_END", text, re.DOTALL)
+    body_match = re.search(r"#BODY_START\s*(.*?)\s*#BODY_END", text, re.DOTALL)
+
+    url = url_match.group(1).strip() if url_match else ""
+    headers_text = headers_match.group(1).strip() if headers_match else ""
+    body_text = body_match.group(1).strip() if body_match else ""
+
+    # Parse headers into dict: each line "key: value"
+    headers = {}
+    for line in headers_text.splitlines():
+        if ':' in line:
+            key, value = line.split(':', 1)
+            headers[key.strip()] = value.strip()
+
+    return url, headers, body_text
+
+def substitute_variables(text, variables):
+    """Replace {{var}} placeholders in text with actual values from variables dict."""
+    def replacer(match):
+        var_name = match.group(1)
+        return variables.get(var_name, f"{{{{{var_name}}}}}")  # keep if missing
+    return re.sub(r"{{(\w+)}}", replacer, text)
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        # Gather uploaded template files from form
+        templates = {}
+        for i in range(1, 7):  # support up to 6 APIs
+            f = request.files.get(f'api{i}')
+            if f:
+                templates[f'api{i}'] = f.read().decode('utf-8')
+            else:
+                templates[f'api{i}'] = ""
+
+        # Variables extracted from previous API calls to replace placeholders
+        variables = {}
+
+        results = []
+
+        try:
+            for i in range(1, 7):
+                template_text = templates.get(f'api{i}', "").strip()
+                if not template_text:
+                    # Skip if no template provided
+                    continue
+
+                # Parse URL, headers, body from template
+                url, headers, body_text = parse_template(template_text)
+
+                # Substitute variables in URL, headers, and body
+                url = substitute_variables(url, variables)
+                headers = {k: substitute_variables(v, variables) for k, v in headers.items()}
+                body_text = substitute_variables(body_text, variables)
+
+                # Detect content-type for requests
+                content_type = headers.get("Content-Type", "").lower()
+
+                # Decide if JSON or XML body or plain text
+                if content_type == "application/json":
+                    import json
+                    body_data = json.loads(body_text) if body_text else None
+                    response = requests.post(url, headers=headers, json=body_data)
+                elif content_type == "application/xml":
+                    response = requests.post(url, headers=headers, data=body_text.encode('utf-8'))
+                else:
+                    # Default to sending body as raw data
+                    response = requests.post(url, headers=headers, data=body_text)
+
+                # Check for HTTP success
+                if not response.ok:
+                    # Raise error with info from response body if possible
+                    raise Exception(f"API{i} failed with status {response.status_code}: {response.text}")
+
+                # Save response info for UI display and logging
+                results.append({
+                    "api": i,
+                    "url": url,
+                    "status_code": response.status_code,
+                    "response_text": response.text,
+                    "headers": dict(response.headers)
+                })
+
+                # Extract variables from response headers or body to use in next API calls
+                # For example: amazonXID, xID from header; token from JSON body; AccountID from second response
+                # This logic depends on your API structure. Here is an example:
+                if i == 1:
+                    variables['amazonXID'] = response.headers.get('amazonXID', '')
+                    variables['xID'] = response.headers.get('xID', '')
+                    try:
+                        json_body = response.json()
+                        variables['token'] = json_body.get('token', '')
+                    except:
+                        variables['token'] = ''
+                elif i == 2:
+                    try:
+                        json_body = response.json()
+                        variables['AccountID'] = json_body.get('AccountID', '')
+                    except:
+                        variables['AccountID'] = ''
+
+                # You can extend this logic for other APIs similarly
+
+            return render_template('index.html', results=results, success=True)
+
+        except Exception as e:
+            # Show error on UI, stop further calls
+            return render_template('index.html', error=str(e), results=results, success=False)
+
+    return render_template('index.html', results=None)
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+
+
+===
+
+
+
+
+import requests  # For making HTTP requests
+import json  # For JSON handling
+import xml.etree.ElementTree as ET  # For XML parsing and generation
+import os  # For file operations
+
+# Configurable variables
+LOOP_COUNT = 3  # Number of iterations
+SAVE_RESPONSES_TO_FILES = True  # Option to save response to files
+
+# Dummy URLs (replace with actual endpoints)
+API1_URL = "https://example.com/api1"
+API2_URL = "https://example.com/api2"
+API3_URL = "https://example.com/api3"
+
+# Dummy headers and query parameters for API 1
+API1_HEADERS = {
+    "Authorization": "Bearer dummy_token_123"
+}
+API1_QUERY_PARAMS = {
+    "param1": "value1"
+}
+
+
+def make_api1_call():
+    """
+    First API: A GET request with headers and query string.
+    Expected to return amazonXID and xID in headers, and token in body.
+    """
+    try:
+        # Make GET request
+        response = requests.get(API1_URL, headers=API1_HEADERS, params=API1_QUERY_PARAMS)
+
+        # Print and validate status code
+        print(f"API 1 Response Code: {response.status_code}")
+        if response.status_code != 200:
+            print("API 1 failed.")
+            return None
+
+        # Parse JSON body
+        body = response.json()
+
+        # Extract data from headers and body
+        amazon_xid = response.headers.get("amazonXID")
+        xid = response.headers.get("xID")
+        token = body.get("token")
+
+        # Print extracted info
+        print("API 1 -> amazonXID:", amazon_xid, ", xID:", xid, ", token:", token)
+
+        # Save response if needed
+        if SAVE_RESPONSES_TO_FILES:
+            with open("api1_response.json", "w") as f:
+                json.dump(body, f, indent=2)
+
+        return amazon_xid, xid, token
+    except Exception as e:
+        print("Error in API 1:", e)
+        return None
+
+
+def make_api2_call(amazon_xid, xid, token):
+    """
+    Second API: A POST request with JSON body and headers.
+    Returns AccountID in the body.
+    """
+    try:
+        # Create JSON body
+        body = {
+            "token": token,
+            "info": "example data"
+        }
+
+        # Create headers
+        headers = {
+            "Content-Type": "application/json",
+            "amazonXID": amazon_xid,
+            "xID": xid
+        }
+
+        # Make POST request
+        response = requests.post(API2_URL, headers=headers, json=body)
+
+        # Print and validate status code
+        print(f"API 2 Response Code: {response.status_code}")
+        if response.status_code != 200:
+            print("API 2 failed.")
+            return None
+
+        # Parse JSON response
+        body = response.json()
+        account_id = body.get("AccountID")
+
+        # Print extracted info
+        print("API 2 -> AccountID:", account_id)
+
+        # Save response if needed
+        if SAVE_RESPONSES_TO_FILES:
+            with open("api2_response.json", "w") as f:
+                json.dump(body, f, indent=2)
+
+        return account_id
+    except Exception as e:
+        print("Error in API 2:", e)
+        return None
+
+
+def make_api3_call(amazon_xid, account_id):
+    """
+    Third API: A POST request with XML body and headers.
+    """
+    try:
+        # Create XML body
+        root = ET.Element("Request")
+        ET.SubElement(root, "AccountID").text = account_id
+        ET.SubElement(root, "Message").text = "Final API call with XML"
+
+        xml_body = ET.tostring(root, encoding="utf-8")
+
+        # Create headers
+        headers = {
+            "Content-Type": "application/xml",
+            "amazonXID": amazon_xid
+        }
+
+        # Make POST request
+        response = requests.post(API3_URL, headers=headers, data=xml_body)
+
+        # Print and validate status code
+        print(f"API 3 Response Code: {response.status_code}")
+        if response.status_code != 200:
+            print("API 3 failed.")
+            return False
+
+        # Parse XML response
+        root_response = ET.fromstring(response.content)
+        message = root_response.findtext("Message")
+
+        # Print extracted info
+        print("API 3 -> Message:", message)
+
+        # Save response if needed
+        if SAVE_RESPONSES_TO_FILES:
+            with open("api3_response.xml", "wb") as f:
+                f.write(response.content)
+
+        return True
+    except Exception as e:
+        print("Error in API 3:", e)
+        return False
+
+
+def run_sequence():
+    """
+    Run the sequence of API calls with the data flow and validation logic.
+    """
+    for i in range(LOOP_COUNT):
+        print(f"\n--- Iteration {i+1} ---")
+        result1 = make_api1_call()
+        if not result1:
+            print("Skipping remaining steps due to API 1 failure.")
+            continue
+
+        amazon_xid, xid, token = result1
+
+        result2 = make_api2_call(amazon_xid, xid, token)
+        if not result2:
+            print("Skipping API 3 due to API 2 failure.")
+            continue
+
+        account_id = result2
+
+        result3 = make_api3_call(amazon_xid, account_id)
+        if not result3:
+            print("API 3 failed.")
+
+        print(f"--- End of Iteration {i+1} ---\n")
+
+
+# Run the full workflow
+if __name__ == "__main__":
+    run_sequence()
+
+
+
+=========
+
+
+
+
+
+import requests
+import json
+import xml.etree.ElementTree as ET
+import re
+import os
+
+def read_template(filename):
+    """
+    Reads entire template file as string
+    """
+    with open(filename, 'r', encoding='utf-8') as f:
+        return f.read()
+
+def extract_section(text, start_marker, end_marker):
+    """
+    Extracts text between start_marker and end_marker
+    Returns stripped string or empty if markers not found
+    """
+    pattern = re.compile(rf'{start_marker}\s*(.*?)\s*{end_marker}', re.DOTALL)
+    match = pattern.search(text)
+    if match:
+        return match.group(1).strip()
+    else:
+        return ""
+
+def parse_headers(headers_text):
+    """
+    Parses headers text block into dict
+    Each line: Key: Value
+    Ignores empty lines or malformed
+    """
+    headers = {}
+    for line in headers_text.splitlines():
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        headers[key.strip()] = value.strip()
+    return headers
+
+def substitute_variables(text, variables):
+    """
+    Replaces placeholders {{var}} in text with corresponding variable values
+    variables: dict of key->value (e.g. "api1.token": "abc123")
+    If variable not found, replace with empty string
+    """
+    def repl(match):
+        var_name = match.group(1).strip()
+        return variables.get(var_name, "")
+    # Regex to find {{varName}}
+    return re.sub(r'{{\s*([^}]+)\s*}}', repl, text)
+
+def parse_json_path(json_obj, path):
+    """
+    Extract value from nested json_obj given dot-separated path like 'data.token.value'
+    Returns "" if path not found
+    """
+    keys = path.split('.')
+    val = json_obj
+    try:
+        for key in keys:
+            if isinstance(val, list):
+                # Support simple integer indexing if path component is number
+                idx = int(key)
+                val = val[idx]
+            else:
+                val = val[key]
+        return str(val)
+    except (KeyError, IndexError, ValueError, TypeError):
+        return ""
+
+def parse_xml_path(xml_root, path):
+    """
+    Extract text from XML element given xpath-like path, e.g. '/Request/Response/DataID'
+    Returns "" if not found
+    """
+    # xml.etree.ElementTree supports find() with limited XPath
+    # Remove leading slash for find()
+    if path.startswith('/'):
+        path = path[1:]
+    elem = xml_root.find(path)
+    if elem is not None and elem.text:
+        return elem.text.strip()
+    return ""
+
+def extract_variables(extract_text, response, api_num, variables):
+    """
+    Parses extract instructions and extracts variables from response
+    Updates variables dict with keys scoped as "api{api_num}.varname"
+    extract_text format per line:
+      varName: sourceType:path
+    sourceType: header | json | xml
+    path: header key or json dot-path or xml xpath
+    """
+    for line in extract_text.splitlines():
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        # Split first colon for varName and rest
+        var_name, source_spec = line.split(':', 1)
+        var_name = var_name.strip()
+        source_spec = source_spec.strip()
+        if ':' not in source_spec:
+            print(f"[WARN] Invalid extract spec '{source_spec}' in API{api_num}")
+            continue
+        source_type, path = source_spec.split(':', 1)
+        source_type = source_type.strip().lower()
+        path = path.strip()
+
+        value = ""
+        try:
+            if source_type == "header":
+                # Headers keys are case-insensitive, normalize lower
+                headers_lower = {k.lower(): v for k, v in response.headers.items()}
+                value = headers_lower.get(path.lower(), "")
+            elif source_type == "json":
+                json_body = response.json()
+                value = parse_json_path(json_body, path)
+            elif source_type == "xml":
+                xml_root = ET.fromstring(response.text)
+                value = parse_xml_path(xml_root, path)
+            else:
+                print(f"[WARN] Unknown source_type '{source_type}' in API{api_num}")
+        except Exception as e:
+            print(f"[ERROR] Exception extracting '{var_name}' from API{api_num}: {e}")
+            value = ""
+
+        scoped_var_name = f"api{api_num}.{var_name}"
+        variables[scoped_var_name] = value
+        print(f"[INFO] Extracted {scoped_var_name} = {value}")
+
+def main():
+    # Number of APIs to call (adjust to your case)
+    api_count = 3
+
+    # Variables dict shared across all APIs, holds extracted variables keyed by "apiN.varName"
+    variables = {}
+
+    # Optional: Store responses for later or logging
+    responses = []
+
+    # Loop through each API template file: api1.txt, api2.txt, ...
+    for i in range(1, api_count + 1):
+        filename = f"api{i}.txt"
+        if not os.path.isfile(filename):
+            print(f"[ERROR] Template file {filename} not found, stopping execution")
+            break
+
+        print(f"\n[INFO] Processing API {i} from template {filename}")
+
+        # Read whole template text
+        template_text = read_template(filename)
+
+        # Extract URL, Headers, Body, Extraction instructions from template
+        url = extract_section(template_text, "#URL_START", "#URL_END")
+        headers_text = extract_section(template_text, "#HEADER_START", "#HEADER_END")
+        body_text = extract_section(template_text, "#BODY_START", "#BODY_END")
+        extract_text = extract_section(template_text, "#EXTRACT_START", "#EXTRACT_END")
+
+        # Substitute variables in URL, headers, body
+        url = substitute_variables(url, variables)
+        headers_text = substitute_variables(headers_text, variables)
+        body_text = substitute_variables(body_text, variables)
+
+        # Parse headers into dict
+        headers = parse_headers(headers_text)
+
+        # Determine HTTP method (you can extend to support GET if you want)
+        # For demo, assume POST if body present, else GET
+        method = "POST" if body_text else "GET"
+
+        # Print request info for debug
+        print(f"[DEBUG] URL: {url}")
+        print(f"[DEBUG] Method: {method}")
+        print(f"[DEBUG] Headers: {headers}")
+        print(f"[DEBUG] Body: {body_text}")
+
+        # Prepare request arguments
+        req_args = {"headers": headers}
+        content_type = headers.get("Content-Type", "").lower()
+
+        # Prepare request body if POST
+        if method == "POST":
+            if "application/json" in content_type:
+                try:
+                    req_args["json"] = json.loads(body_text)
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] Invalid JSON body in API {i}: {e}")
+                    break
+            else:
+                # Send body as raw text for XML or others
+                req_args["data"] = body_text
+
+        # Make HTTP request safely
+        try:
+            if method == "POST":
+                response = requests.post(url, **req_args)
+            else:
+                response = requests.get(url, **req_args)
+        except Exception as e:
+            print(f"[ERROR] Exception calling API {i}: {e}")
+            break
+
+        # Check HTTP response code
+        if not (200 <= response.status_code < 300):
+            print(f"[ERROR] API {i} returned status {response.status_code}")
+            print(f"Response body:\n{response.text}")
+            break  # Stop further calls on failure
+
+        print(f"[INFO] API {i} call successful, status {response.status_code}")
+
+        # Extract variables from response
+        extract_variables(extract_text, response, i, variables)
+
+        # Store response for logging or file save (optional)
+        responses.append({
+            "api": i,
+            "url": url,
+            "status": response.status_code,
+            "headers": dict(response.headers),
+            "body": response.text,
+        })
+
+    # Optionally: print summary or save all responses
+    print("\n[INFO] All API calls completed. Extracted variables:")
+    for k, v in variables.items():
+        print(f"{k} = {v}")
+
+    # Optionally: Save responses to files
+    for resp in responses:
+        fname = f"api{resp['api']}_response.txt"
+        with open(fname, "w", encoding="utf-8") as f:
+            f.write(f"URL: {resp['url']}\n")
+            f.write(f"Status: {resp['status']}\n")
+            f.write(f"Headers:\n")
+            for hk, hv in resp['headers'].items():
+                f.write(f"{hk}: {hv}\n")
+            f.write("\nBody:\n")
+            f.write(resp['body'])
+        print(f"[INFO] Saved API {resp['api']} response to {fname}")
+
+if __name__ == "__main__":
+    main()
