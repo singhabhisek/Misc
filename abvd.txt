@@ -1,611 +1,1346 @@
+# from flask import Flask, render_template, request, jsonify
+# from flask_cors import CORS # Import CORS
+# import requests
+# import json
+# import xml.etree.ElementTree as ET
+# import re
+# import os
+
+# app = Flask(__name__)
+# CORS(app) # Enable CORS for all routes
+
+# # Define the directory where API template files are stored
+# API_TEMPLATES_DIR = '.' # Assuming API files are in the same directory as app.py for now
+
+# # Read the full template file as a string
+# def read_template(filename):
+#     # Construct the full path to the template file
+#     file_path = os.path.join(API_TEMPLATES_DIR, filename)
+#     with open(file_path, 'r', encoding='utf-8') as f:
+#         return f.read()
+
+# # Extract section between start and end markers from template
+# def extract_section(text, start_marker, end_marker):
+#     pattern = re.compile(rf'{start_marker}\s*(.*?)\s*{end_marker}', re.DOTALL)
+#     match = pattern.search(text)
+#     return match.group(1).strip() if match else ""
+
+# # Convert header text block into a dictionary
+# def parse_headers(headers_text):
+#     headers = {}
+#     for line in headers_text.splitlines():
+#         line = line.strip()
+#         if not line or ':' not in line:
+#             continue
+#         key, value = line.split(':', 1)
+#         headers[key.strip()] = value.strip()
+#     return headers
+
+# # Replace {{variable}} placeholders using values from the dictionary
+# def substitute_variables(text, variables):
+#     def repl(match):
+#         var_name = match.group(1).strip()
+#         return variables.get(var_name, "")  # Return empty string if variable not found
+#     return re.sub(r'{{\s*([^}]+)\s*}}', repl, text)
+
+# # Get a nested value from a JSON object using dot notation
+# def parse_json_path(json_obj, path):
+#     keys = path.split('.')
+#     val = json_obj
+#     try:
+#         for key in keys:
+#             if isinstance(val, list):
+#                 val = val[int(key)]
+#             else:
+#                 val = val[key]
+#         return str(val)
+#     except (KeyError, IndexError, ValueError, TypeError):
+#         return ""
+
+# # Get a value from XML element using a simplified XPath
+# def parse_xml_path(xml_root, path):
+#     if path.startswith('/'):
+#         path = path[1:]
+#     elem = xml_root.find(path)
+#     return elem.text.strip() if elem is not None and elem.text else ""
+
+# def extract_variables(extract_text, response, api_key, variables, logs=None):
+#     for line in extract_text.splitlines():
+#         line = line.strip()
+#         if not line or ':' not in line:
+#             continue
+#         # var_name_from_template will be 'token', 'user_id', etc. (without api_key prefix)
+#         var_name_from_template, source_spec = line.split(':', 1)
+#         var_name_from_template = var_name_from_template.strip()
+#         source_spec = source_spec.strip()
+
+#         if ':' not in source_spec:
+#             continue
+
+#         source_type, path = source_spec.split(':', 1)
+#         source_type = source_type.strip().lower()
+#         path = path.strip()
+
+#         value = ""
+#         try:
+#             if source_type == "header":
+#                 headers_lower = {k.lower(): v for k, v in response.headers.items()}
+#                 value = headers_lower.get(path.lower(), "")
+#             elif source_type == "json":
+#                 # Only attempt JSON parsing if response content type is JSON
+#                 if 'application/json' in response.headers.get('Content-Type', '').lower():
+#                     value = parse_json_path(response.json(), path)
+#                 else:
+#                     if logs is not None:
+#                         logs.append(f"[WARN] Cannot extract JSON from non-JSON response for {var_name_from_template}.")
+#             elif source_type == "xml":
+#                 # Only attempt XML parsing if response content type is XML
+#                 if 'application/xml' in response.headers.get('Content-Type', '').lower():
+#                     value = parse_xml_path(ET.fromstring(response.text), path)
+#                 else:
+#                     if logs is not None:
+#                         logs.append(f"[WARN] Cannot extract XML from non-XML response for {var_name_from_template}.")
+#         except Exception as e:
+#             if logs is not None:
+#                 logs.append(f"[WARN] Failed to extract {var_name_from_template} from {source_type}:{path} - {e}")
+#             continue
+
+#         # Always prepend the api_key to the variable name from the template
+#         # This ensures variables are stored as 'api1.token', 'api1.user_id', etc.
+#         # Prevent duplicate prefixing like api1.api1.token
+#         if not var_name_from_template.startswith(f"{api_key}."):
+#             scoped_var_name = f"{api_key}.{var_name_from_template}"
+#         else:
+#             scoped_var_name = var_name_from_template
+#         variables[scoped_var_name] = value
+
+#         if logs is not None:
+#             logs.append(f"[INFO] Extracted {scoped_var_name} = {value}")
+
+#     if logs is not None:
+#         logs.append(f"[INFO] Finished extracting variables for {api_key}")
+
+# @app.route('/')
+# def index():
+#     # Frontend will now fetch the API sequence via AJAX
+#     return render_template('index.html')
+
+# @app.route('/get_config', methods=['GET'])
+# def get_config():
+#     config_file = 'config.txt'
+#     apis = []
+#     try:
+#         with open(os.path.join(API_TEMPLATES_DIR, config_file), 'r') as f:
+#             # Assuming config.txt lists API filenames, one per line
+#             apis = [line.strip() for line in f if line.strip()]
+#         return jsonify({"success": True, "sequence": apis})
+#     except FileNotFoundError:
+#         return jsonify({"success": False, "error": f"Config file '{config_file}' not found."}), 404
+#     except Exception as e:
+#         return jsonify({"success": False, "error": str(e)}), 500
+
+# @app.route('/get_api_details', methods=['GET'])
+# def get_api_details():
+#     api_file = request.args.get('file')
+#     if not api_file:
+#         return jsonify({"success": False, "error": "API file not specified."}), 400
+
+#     file_path = os.path.join(API_TEMPLATES_DIR, api_file)
+
+#     if not os.path.isfile(file_path):
+#         return jsonify({"success": False, "error": f"API template file '{api_file}' not found."}), 404
+
+#     try:
+#         template_text = read_template(api_file) # Use read_template directly
+#         url = extract_section(template_text, "#URL_START", "#URL_END")
+#         headers_text = extract_section(template_text, "#HEADER_START", "#HEADER_END")
+#         body_text = extract_section(template_text, "#BODY_START", "#BODY_END")
+#         extract_text = extract_section(template_text, "#EXTRACT_START", "#EXTRACT_END")
+
+#         # Return the extracted sections as raw strings
+#         return jsonify({
+#             "success": True,
+#             "details": {
+#                 "url": url,
+#                 "headers": headers_text,
+#                 "body": body_text,
+#                 "extract_rules": extract_text
+#             }
+#         })
+#     except Exception as e:
+#         return jsonify({"success": False, "error": f"Error reading API template: {str(e)}"}), 500
 
 
-#URL_START
-https://api.example.com/data
-#URL_END
+# @app.route('/run', methods=['POST'])
+# def run_apis():
+#     logs = []
+#     overall_success = True # Flag to track if any API failed (non-2xx status)
+#     try:
+#         data = request.json
+#         iterations = int(data.get('iterations', 1))
+#         config_file = 'config.txt'
+#         apis = []
+#         try:
+#             with open(os.path.join(API_TEMPLATES_DIR, config_file), 'r') as f:
+#                 apis = [line.strip() for line in f if line.strip()]
+#             logs.append(f"[INFO] Loaded config file '{config_file}' with APIs: {apis}")
+#         except FileNotFoundError:
+#             logs.append(f"[ERROR] Config file '{config_file}' not found.")
+#             return jsonify({'success': False, 'error': 'config.txt not found', 'logs': logs})
 
-#HEADER_START
-Content-Type: application/xml
-amazonXID: {{api1.amazonXID}}
-Authorization: Bearer {{api1.token}}
-#HEADER_END
+#         all_results = []
+#         variables = {}  # Variables persist across iterations
 
-#BODY_START
-<Request>
-    <AccountID>{{api2.AccountID}}</AccountID>
-    <SessionToken>{{api1.token}}</SessionToken>
-</Request>
-#BODY_END
+#         for iter_num in range(1, iterations + 1):
+#             logs.append(f"[INFO] Starting iteration {iter_num}")
+            
+#             # We use the main 'variables' dictionary directly for substitution
+#             # so that variables extracted by previous APIs in the same iteration are immediately available.
 
-#EXTRACT_START
-dataID: xml:/Request/Response/DataID
-#EXTRACT_END
+#             for index, filename in enumerate(apis, start=1):
+#                 api_key = os.path.splitext(filename)[0]  # e.g., 'api1', 'api3', 'api2'
+#                 logs.append(f"[INFO] Processing API {index} ({filename}) in iteration {iter_num}")
 
-#URL_START
-https://api.example.com/session
-#URL_END
+#                 if not os.path.isfile(os.path.join(API_TEMPLATES_DIR, filename)):
+#                     err_msg = f"Template file {filename} not found"
+#                     logs.append(f"[ERROR] {err_msg}")
+#                     overall_success = False # Mark overall success as False
+#                     # Continue to next API instead of returning
+#                     all_results.append({
+#                         'api_file': filename,
+#                         'iteration': iter_num,
+#                         'status': 'N/A', # Not Applicable
+#                         'url': 'N/A',
+#                         'method': 'N/A',
+#                         'request_body': 'N/A',
+#                         'headers': {},
+#                         'body': err_msg
+#                     })
+#                     continue # Skip to next API
 
-#HEADER_START
-Content-Type: application/json
-Authorization: Bearer {{api1.token}}
-#HEADER_END
+#                 template_text = read_template(filename)
+#                 url_template = extract_section(template_text, "#URL_START", "#URL_END")
+#                 headers_text_template = extract_section(template_text, "#HEADER_START", "#HEADER_END")
+#                 body_text_template = extract_section(template_text, "#BODY_START", "#BODY_END")
+#                 extract_text = extract_section(template_text, "#EXTRACT_START", "#EXTRACT_END")
 
-#BODY_START
-{
-  "session_start": true
-}
-#BODY_END
+#                 # Substitute variables in URL, headers, and body using the main 'variables' dict
+#                 # This ensures variables extracted by previous APIs in the same iteration are available.
+#                 url = substitute_variables(url_template, variables)
+#                 headers_text = substitute_variables(headers_text_template, variables)
+#                 body_text = substitute_variables(body_text_template, variables)
 
-#EXTRACT_START
-api2.token: json:token
-api2.AccountID: json:AccountID
-#EXTRACT_END
+#                 headers = parse_headers(headers_text)
+#                 method = "POST" if body_text else "GET" # Determine method based on body presence
+
+#                 logs.append(f"[DEBUG] URL: {url}")
+#                 logs.append(f"[DEBUG] Method: {method}")
+#                 logs.append(f"[DEBUG] Headers: {headers}")
+#                 logs.append(f"[DEBUG] Body: {body_text}")
+
+#                 req_args = {"headers": headers}
+#                 request_body_for_log = None # To store the request body for logging
+
+#                 if method == "POST":
+#                     content_type = headers.get("Content-Type", "").lower()
+#                     if "application/json" in content_type:
+#                         try:
+#                             req_args["json"] = json.loads(body_text)
+#                             request_body_for_log = req_args["json"] # Capture parsed JSON
+#                         except json.JSONDecodeError as e:
+#                             err_msg = f"Invalid JSON in {filename}: {e}"
+#                             logs.append(f"[ERROR] {err_msg}")
+#                             overall_success = False # Mark overall success as False
+#                             # Continue to next API instead of returning
+#                             all_results.append({
+#                                 'api_file': filename,
+#                                 'iteration': iter_num,
+#                                 'status': 'JSON_ERROR',
+#                                 'url': url,
+#                                 'method': method,
+#                                 'request_body': body_text, # Keep raw body if JSON parsing failed
+#                                 'headers': headers,
+#                                 'body': err_msg
+#                             })
+#                             continue # Skip to next API
+#                     else:
+#                         req_args["data"] = body_text
+#                         request_body_for_log = body_text # Capture raw body
+
+#                 try:
+#                     response = None
+#                     if method == "POST":
+#                         response = requests.post(url, **req_args)
+#                     else:
+#                         response = requests.get(url, **req_args)
+                    
+#                     logs.append(f"[INFO] Response status code: {response.status_code}")
+
+#                     if not (200 <= response.status_code < 300):
+#                         err_msg = f"{filename} returned status {response.status_code}"
+#                         logs.append(f"[ERROR] {err_msg}")
+#                         logs.append(f"Response body:\n{response.text}")
+#                         overall_success = False # Mark overall success as False
+#                         # Continue to next API instead of returning here
+#                     else:
+#                         logs.append(f"[INFO] {filename} call successful.")
+
+#                     # Extract variables even on non-2xx responses if the template expects it
+#                     # This might be useful for extracting error codes or messages
+#                     extract_variables(extract_text, response, api_key, variables, logs)
+
+#                     # Append results for this specific API call within this iteration
+#                     all_results.append({
+#                         'api_file': filename,
+#                         'iteration': iter_num,
+#                         'status': response.status_code,
+#                         'url': url,
+#                         'method': method, # Added method
+#                         'request_body': request_body_for_log, # Added request body for logging
+#                         'headers': dict(response.headers),
+#                         'body': response.text
+#                     })
+
+#                 except requests.exceptions.RequestException as e:
+#                     err_msg = f"Network/Connection error calling {filename}: {str(e)}"
+#                     logs.append(f"[ERROR] {err_msg}")
+#                     overall_success = False # Mark overall success as False
+#                     # Capture the error in results and continue
+#                     all_results.append({
+#                         'api_file': filename,
+#                         'iteration': iter_num,
+#                         'status': 'NETWORK_ERROR',
+#                         'url': url,
+#                         'method': method,
+#                         'request_body': request_body_for_log,
+#                         'headers': {},
+#                         'body': err_msg
+#                     })
+#                 except Exception as e:
+#                     err_msg = f"Unexpected error during API call {filename}: {str(e)}"
+#                     logs.append(f"[ERROR] {err_msg}")
+#                     overall_success = False # Mark overall success as False
+#                     # Capture the error in results and continue
+#                     all_results.append({
+#                         'api_file': filename,
+#                         'iteration': iter_num,
+#                         'status': 'UNKNOWN_ERROR',
+#                         'url': url,
+#                         'method': method,
+#                         'request_body': request_body_for_log,
+#                         'headers': {},
+#                         'body': err_msg
+#                     })
+
+#                 # Debug: show variables after processing {api_key}
+#                 logs.append(f"[DEBUG] Variables after processing {api_key}: {variables}")
+
+#         logs.append("[INFO] All iterations completed.")
+#         if not overall_success:
+#             logs.append("[WARNING] Some API calls failed or encountered errors during execution.")
 
 
-==========================
+#         return jsonify({'success': overall_success, 'responses': all_results, 'logs': logs, 'extracted_variables': variables})
 
-from flask import Flask, render_template, request, jsonify
-import requests
-import re
+#     except Exception as e:
+#         logs.append(f"[ERROR] Unexpected error in run_apis function: {str(e)}")
+#         return jsonify({'success': False, 'error': str(e), 'logs': logs})
 
+
+# if __name__ == '__main__':
+#     # Create dummy config.txt and api template files for testing if they don't exist
+#     if not os.path.exists('config.txt'):
+#         with open('config.txt', 'w') as f:
+#             f.write("api1.txt\n")
+#             f.write("api3.txt\n") # api3.txt is now before api2.txt as per your logs
+#             f.write("api2.txt\n")
+
+#     # Ensure API_TEMPLATES_DIR exists
+#     if not os.path.exists(API_TEMPLATES_DIR):
+#         os.makedirs(API_TEMPLATES_DIR)
+
+#     # if not os.path.exists(os.path.join(API_TEMPLATES_DIR, 'api1.txt')):
+#     #     with open(os.path.join(API_TEMPLATES_DIR, 'api1.txt'), 'w') as f:
+#     #         f.write("#URL_START\nhttp://localhost:5001/mock/login\n#URL_END\n")
+#     #         f.write("#HEADER_START\nContent-Type: application/json\n#HEADER_END\n")
+#     #         f.write("#BODY_START\n{\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}\n#BODY_END\n")
+#     #         # Corrected extraction: 'token' and 'user_id' are key names in the template
+#     #         f.write("#EXTRACT_START\ntoken: json:data.token\nuser_id: json:data.user.id\namazonXID: header:X-Amzn-Trace-Id\n#EXTRACT_END\n")
+
+
+#     # if not os.path.exists(os.path.join(API_TEMPLATES_DIR, 'api2.txt')):
+#     #     with open(os.path.join(API_TEMPLATES_DIR, 'api2.txt'), 'w') as f:
+#     #         f.write("#URL_START\nhttp://localhost:5001/mock/profile/{{api1.user_id}}\n#URL_END\n")
+#     #         # Corrected header to use 'Authorization: Bearer' and reference 'api1.token'
+#     #         f.write("#HEADER_START\nContent-Type: application/json\nAuthorization: Bearer {{api1.token}}\n#HEADER_END\n")
+#     #         f.write("#BODY_START\n{}\n#BODY_END\n")
+#     #         f.write("#EXTRACT_START\nprofile_status: json:data.status\n#EXTRACT_END\n")
+
+#     # if not os.path.exists(os.path.join(API_TEMPLATES_DIR, 'api3.txt')):
+#     #     with open(os.path.join(API_TEMPLATES_DIR, 'api3.txt'), 'w') as f:
+#     #         f.write("#URL_START\nhttp://localhost:5001/mock/data\n#URL_END\n")
+#     #         # Added amazonXID header for api3.txt to use extracted variable
+#     #         f.write("#HEADER_START\nContent-Type: application/xml\namazonXID: {{api1.amazonXID}}\n#HEADER_END\n")
+#     #         f.write("#BODY_START\n<Request>\n  <AccountID>ACCT-456</AccountID>\n  <Message>Final API call with XML</Message>\n</Request>\n#BODY_END\n")
+#     #         # Added extraction for api3.txt to demonstrate
+#     #         f.write("#EXTRACT_START\nstatus: xml:/Response/Status\naccount_received: xml:/Response/AccountID\necho_message: xml:/Response/Message\namazonXID_received: header:X-Amzn-Trace-Id\n#EXTRACT_END\n")
+
+#     # # Add mock API endpoints for testing
+#     # @app.route('/mock/login', methods=['POST'])
+#     # def mock_login():
+#     #     # Simulate setting a custom header for amazonXID
+#     #     response = jsonify({"data": {"token": "MOCK_TOKEN_123", "user": {"id": "mock_user_456"}}})
+#     #     response.headers['X-Amzn-Trace-Id'] = 'AMAZON-999' # Example header
+#     #     return response, 200
+
+#     # @app.route('/mock/profile/<user_id>', methods=['GET'])
+#     # def mock_profile(user_id):
+#     #     auth_header = request.headers.get('Authorization')
+#     #     # Check for the correct token format
+#     #     if auth_header == 'Bearer MOCK_TOKEN_123':
+#     #         return jsonify({"data": {"user_id": user_id, "status": "active", "details": "Mock profile data"}}), 200
+#     #     # Simulate an unauthorized response
+#     #     return jsonify({"error": "Unauthorized", "message": "Invalid or missing Authorization header"}), 401
+
+#     # @app.route('/mock/data', methods=['POST'])
+#     # def mock_data():
+#     #     # Simulate an XML response with some data
+#     #     xml_response = """<Response><Status>Success</Status><AccountID>ACCT-456</AccountID><Message>Data processed</Message></Response>"""
+#     #     response = app.make_response(xml_response)
+#     #     response.headers['Content-Type'] = 'application/xml'
+#     #     response.headers['X-Amzn-Trace-Id'] = 'AMAZON-TRACE-ID-FOR-API3' # Another example header
+#     #     return response, 200
+
+#     app.run(debug=True, port=5000)
+
+# Import necessary modules
+from flask import Flask, render_template, request, jsonify  # Flask core components: app creation, templating, request parsing, JSON response
+from flask_cors import CORS  # To enable Cross-Origin Resource Sharing
+import requests  # To make HTTP requests
+import json  # To handle JSON serialization/deserialization
+import xml.etree.ElementTree as ET  # Built-in XML parsing library
+import re  # For regular expressions (used in template parsing)
+import os  # File and path operations
+
+# Initialize the Flask application
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
-def parse_template(text):
-    """Extract URL, headers, and body from the template text using markers."""
-    url_match = re.search(r"#URL_START\s*(.*?)\s*#URL_END", text, re.DOTALL)
-    headers_match = re.search(r"#HEADER_START\s*(.*?)\s*#HEADER_END", text, re.DOTALL)
-    body_match = re.search(r"#BODY_START\s*(.*?)\s*#BODY_END", text, re.DOTALL)
+# Define directory for API template files
+API_TEMPLATES_DIR = '.'  # Use current directory for storing API templates
 
-    url = url_match.group(1).strip() if url_match else ""
-    headers_text = headers_match.group(1).strip() if headers_match else ""
-    body_text = body_match.group(1).strip() if body_match else ""
-
-    # Parse headers into dict: each line "key: value"
-    headers = {}
-    for line in headers_text.splitlines():
-        if ':' in line:
-            key, value = line.split(':', 1)
-            headers[key.strip()] = value.strip()
-
-    return url, headers, body_text
-
-def substitute_variables(text, variables):
-    """Replace {{var}} placeholders in text with actual values from variables dict."""
-    def replacer(match):
-        var_name = match.group(1)
-        return variables.get(var_name, f"{{{{{var_name}}}}}")  # keep if missing
-    return re.sub(r"{{(\w+)}}", replacer, text)
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'POST':
-        # Gather uploaded template files from form
-        templates = {}
-        for i in range(1, 7):  # support up to 6 APIs
-            f = request.files.get(f'api{i}')
-            if f:
-                templates[f'api{i}'] = f.read().decode('utf-8')
-            else:
-                templates[f'api{i}'] = ""
-
-        # Variables extracted from previous API calls to replace placeholders
-        variables = {}
-
-        results = []
-
-        try:
-            for i in range(1, 7):
-                template_text = templates.get(f'api{i}', "").strip()
-                if not template_text:
-                    # Skip if no template provided
-                    continue
-
-                # Parse URL, headers, body from template
-                url, headers, body_text = parse_template(template_text)
-
-                # Substitute variables in URL, headers, and body
-                url = substitute_variables(url, variables)
-                headers = {k: substitute_variables(v, variables) for k, v in headers.items()}
-                body_text = substitute_variables(body_text, variables)
-
-                # Detect content-type for requests
-                content_type = headers.get("Content-Type", "").lower()
-
-                # Decide if JSON or XML body or plain text
-                if content_type == "application/json":
-                    import json
-                    body_data = json.loads(body_text) if body_text else None
-                    response = requests.post(url, headers=headers, json=body_data)
-                elif content_type == "application/xml":
-                    response = requests.post(url, headers=headers, data=body_text.encode('utf-8'))
-                else:
-                    # Default to sending body as raw data
-                    response = requests.post(url, headers=headers, data=body_text)
-
-                # Check for HTTP success
-                if not response.ok:
-                    # Raise error with info from response body if possible
-                    raise Exception(f"API{i} failed with status {response.status_code}: {response.text}")
-
-                # Save response info for UI display and logging
-                results.append({
-                    "api": i,
-                    "url": url,
-                    "status_code": response.status_code,
-                    "response_text": response.text,
-                    "headers": dict(response.headers)
-                })
-
-                # Extract variables from response headers or body to use in next API calls
-                # For example: amazonXID, xID from header; token from JSON body; AccountID from second response
-                # This logic depends on your API structure. Here is an example:
-                if i == 1:
-                    variables['amazonXID'] = response.headers.get('amazonXID', '')
-                    variables['xID'] = response.headers.get('xID', '')
-                    try:
-                        json_body = response.json()
-                        variables['token'] = json_body.get('token', '')
-                    except:
-                        variables['token'] = ''
-                elif i == 2:
-                    try:
-                        json_body = response.json()
-                        variables['AccountID'] = json_body.get('AccountID', '')
-                    except:
-                        variables['AccountID'] = ''
-
-                # You can extend this logic for other APIs similarly
-
-            return render_template('index.html', results=results, success=True)
-
-        except Exception as e:
-            # Show error on UI, stop further calls
-            return render_template('index.html', error=str(e), results=results, success=False)
-
-    return render_template('index.html', results=None)
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
-
-
-
-===
-
-
-
-
-import requests  # For making HTTP requests
-import json  # For JSON handling
-import xml.etree.ElementTree as ET  # For XML parsing and generation
-import os  # For file operations
-
-# Configurable variables
-LOOP_COUNT = 3  # Number of iterations
-SAVE_RESPONSES_TO_FILES = True  # Option to save response to files
-
-# Dummy URLs (replace with actual endpoints)
-API1_URL = "https://example.com/api1"
-API2_URL = "https://example.com/api2"
-API3_URL = "https://example.com/api3"
-
-# Dummy headers and query parameters for API 1
-API1_HEADERS = {
-    "Authorization": "Bearer dummy_token_123"
-}
-API1_QUERY_PARAMS = {
-    "param1": "value1"
-}
-
-
-def make_api1_call():
-    """
-    First API: A GET request with headers and query string.
-    Expected to return amazonXID and xID in headers, and token in body.
-    """
-    try:
-        # Make GET request
-        response = requests.get(API1_URL, headers=API1_HEADERS, params=API1_QUERY_PARAMS)
-
-        # Print and validate status code
-        print(f"API 1 Response Code: {response.status_code}")
-        if response.status_code != 200:
-            print("API 1 failed.")
-            return None
-
-        # Parse JSON body
-        body = response.json()
-
-        # Extract data from headers and body
-        amazon_xid = response.headers.get("amazonXID")
-        xid = response.headers.get("xID")
-        token = body.get("token")
-
-        # Print extracted info
-        print("API 1 -> amazonXID:", amazon_xid, ", xID:", xid, ", token:", token)
-
-        # Save response if needed
-        if SAVE_RESPONSES_TO_FILES:
-            with open("api1_response.json", "w") as f:
-                json.dump(body, f, indent=2)
-
-        return amazon_xid, xid, token
-    except Exception as e:
-        print("Error in API 1:", e)
-        return None
-
-
-def make_api2_call(amazon_xid, xid, token):
-    """
-    Second API: A POST request with JSON body and headers.
-    Returns AccountID in the body.
-    """
-    try:
-        # Create JSON body
-        body = {
-            "token": token,
-            "info": "example data"
-        }
-
-        # Create headers
-        headers = {
-            "Content-Type": "application/json",
-            "amazonXID": amazon_xid,
-            "xID": xid
-        }
-
-        # Make POST request
-        response = requests.post(API2_URL, headers=headers, json=body)
-
-        # Print and validate status code
-        print(f"API 2 Response Code: {response.status_code}")
-        if response.status_code != 200:
-            print("API 2 failed.")
-            return None
-
-        # Parse JSON response
-        body = response.json()
-        account_id = body.get("AccountID")
-
-        # Print extracted info
-        print("API 2 -> AccountID:", account_id)
-
-        # Save response if needed
-        if SAVE_RESPONSES_TO_FILES:
-            with open("api2_response.json", "w") as f:
-                json.dump(body, f, indent=2)
-
-        return account_id
-    except Exception as e:
-        print("Error in API 2:", e)
-        return None
-
-
-def make_api3_call(amazon_xid, account_id):
-    """
-    Third API: A POST request with XML body and headers.
-    """
-    try:
-        # Create XML body
-        root = ET.Element("Request")
-        ET.SubElement(root, "AccountID").text = account_id
-        ET.SubElement(root, "Message").text = "Final API call with XML"
-
-        xml_body = ET.tostring(root, encoding="utf-8")
-
-        # Create headers
-        headers = {
-            "Content-Type": "application/xml",
-            "amazonXID": amazon_xid
-        }
-
-        # Make POST request
-        response = requests.post(API3_URL, headers=headers, data=xml_body)
-
-        # Print and validate status code
-        print(f"API 3 Response Code: {response.status_code}")
-        if response.status_code != 200:
-            print("API 3 failed.")
-            return False
-
-        # Parse XML response
-        root_response = ET.fromstring(response.content)
-        message = root_response.findtext("Message")
-
-        # Print extracted info
-        print("API 3 -> Message:", message)
-
-        # Save response if needed
-        if SAVE_RESPONSES_TO_FILES:
-            with open("api3_response.xml", "wb") as f:
-                f.write(response.content)
-
-        return True
-    except Exception as e:
-        print("Error in API 3:", e)
-        return False
-
-
-def run_sequence():
-    """
-    Run the sequence of API calls with the data flow and validation logic.
-    """
-    for i in range(LOOP_COUNT):
-        print(f"\n--- Iteration {i+1} ---")
-        result1 = make_api1_call()
-        if not result1:
-            print("Skipping remaining steps due to API 1 failure.")
-            continue
-
-        amazon_xid, xid, token = result1
-
-        result2 = make_api2_call(amazon_xid, xid, token)
-        if not result2:
-            print("Skipping API 3 due to API 2 failure.")
-            continue
-
-        account_id = result2
-
-        result3 = make_api3_call(amazon_xid, account_id)
-        if not result3:
-            print("API 3 failed.")
-
-        print(f"--- End of Iteration {i+1} ---\n")
-
-
-# Run the full workflow
-if __name__ == "__main__":
-    run_sequence()
-
-
-
-=========
-
-
-
-
-
-import requests
-import json
-import xml.etree.ElementTree as ET
-import re
-import os
-
+# Read entire template file content as string
 def read_template(filename):
-    """
-    Reads entire template file as string
-    """
-    with open(filename, 'r', encoding='utf-8') as f:
-        return f.read()
+    file_path = os.path.join(API_TEMPLATES_DIR, filename)  # Full path to template file
+    with open(file_path, 'r', encoding='utf-8') as f:  # Open file with UTF-8 encoding
+        return f.read()  # Return file contents
 
+# Extract a block of text between two markers using regex
 def extract_section(text, start_marker, end_marker):
-    """
-    Extracts text between start_marker and end_marker
-    Returns stripped string or empty if markers not found
-    """
-    pattern = re.compile(rf'{start_marker}\s*(.*?)\s*{end_marker}', re.DOTALL)
-    match = pattern.search(text)
-    if match:
-        return match.group(1).strip()
-    else:
-        return ""
+    pattern = re.compile(rf'{start_marker}\s*(.*?)\s*{end_marker}', re.DOTALL)  # Regex to capture content between markers
+    match = pattern.search(text)  # Perform search
+    return match.group(1).strip() if match else ""  # Return matched content or empty string
 
+# Parse raw header string block into a dictionary
 def parse_headers(headers_text):
-    """
-    Parses headers text block into dict
-    Each line: Key: Value
-    Ignores empty lines or malformed
-    """
     headers = {}
-    for line in headers_text.splitlines():
+    for line in headers_text.splitlines():  # Loop over each line
         line = line.strip()
         if not line or ':' not in line:
-            continue
-        key, value = line.split(':', 1)
-        headers[key.strip()] = value.strip()
+            continue  # Skip blank or malformed lines
+        key, value = line.split(':', 1)  # Split at first colon
+        headers[key.strip()] = value.strip()  # Add to dictionary
     return headers
 
+# Replace {{var}} placeholders with actual values from variables dict
 def substitute_variables(text, variables):
-    """
-    Replaces placeholders {{var}} in text with corresponding variable values
-    variables: dict of key->value (e.g. "api1.token": "abc123")
-    If variable not found, replace with empty string
-    """
-    def repl(match):
+    def repl(match):  # Inner function to replace each match
         var_name = match.group(1).strip()
-        return variables.get(var_name, "")
-    # Regex to find {{varName}}
-    return re.sub(r'{{\s*([^}]+)\s*}}', repl, text)
+        return variables.get(var_name, "")  # Fallback to empty string if var not found
+    return re.sub(r'{{\s*([^}]+)\s*}}', repl, text)  # Replace all {{...}} patterns
 
+# Access nested key path inside a JSON object using dot notation
 def parse_json_path(json_obj, path):
-    """
-    Extract value from nested json_obj given dot-separated path like 'data.token.value'
-    Returns "" if path not found
-    """
-    keys = path.split('.')
+    keys = path.split('.')  # Split path by dot
     val = json_obj
     try:
         for key in keys:
             if isinstance(val, list):
-                # Support simple integer indexing if path component is number
-                idx = int(key)
-                val = val[idx]
+                val = val[int(key)]  # Convert index to int for list access
             else:
-                val = val[key]
-        return str(val)
+                val = val[key]  # Dict key access
+        return str(val)  # Convert result to string
     except (KeyError, IndexError, ValueError, TypeError):
-        return ""
+        return ""  # Fallback to empty string on failure
 
+# Parse XML path and extract text from matching element
 def parse_xml_path(xml_root, path):
-    """
-    Extract text from XML element given xpath-like path, e.g. '/Request/Response/DataID'
-    Returns "" if not found
-    """
-    # xml.etree.ElementTree supports find() with limited XPath
-    # Remove leading slash for find()
     if path.startswith('/'):
-        path = path[1:]
-    elem = xml_root.find(path)
-    if elem is not None and elem.text:
-        return elem.text.strip()
-    return ""
+        path = path[1:]  # Strip leading slash
+    elem = xml_root.find(path)  # Use simplified XPath to find element
+    return elem.text.strip() if elem is not None and elem.text else ""  # Return stripped text or empty string
 
-def extract_variables(extract_text, response, api_num, variables):
-    """
-    Parses extract instructions and extracts variables from response
-    Updates variables dict with keys scoped as "api{api_num}.varname"
-    extract_text format per line:
-      varName: sourceType:path
-    sourceType: header | json | xml
-    path: header key or json dot-path or xml xpath
-    """
+# Extract variables from headers, JSON or XML response using provided extraction rules
+def extract_variables(extract_text, response, api_key, variables, logs=None):
     for line in extract_text.splitlines():
         line = line.strip()
         if not line or ':' not in line:
-            continue
-        # Split first colon for varName and rest
-        var_name, source_spec = line.split(':', 1)
-        var_name = var_name.strip()
+            continue  # Skip blank or invalid lines
+
+        var_name_from_template, source_spec = line.split(':', 1)
+        var_name_from_template = var_name_from_template.strip()
         source_spec = source_spec.strip()
+
         if ':' not in source_spec:
-            print(f"[WARN] Invalid extract spec '{source_spec}' in API{api_num}")
-            continue
+            continue  # Invalid source spec
+
         source_type, path = source_spec.split(':', 1)
         source_type = source_type.strip().lower()
         path = path.strip()
 
-        value = ""
+        value = ""  # Default value
+
         try:
             if source_type == "header":
-                # Headers keys are case-insensitive, normalize lower
-                headers_lower = {k.lower(): v for k, v in response.headers.items()}
-                value = headers_lower.get(path.lower(), "")
+                headers_lower = {k.lower(): v for k, v in response.headers.items()}  # Normalize header keys
+                value = headers_lower.get(path.lower(), "")  # Case-insensitive header lookup
             elif source_type == "json":
-                json_body = response.json()
-                value = parse_json_path(json_body, path)
+                if 'application/json' in response.headers.get('Content-Type', '').lower():
+                    value = parse_json_path(response.json(), path)  # Parse value from JSON body
+                else:
+                    if logs is not None:
+                        logs.append(f"[WARN] Cannot extract JSON from non-JSON response for {var_name_from_template}.")
             elif source_type == "xml":
-                xml_root = ET.fromstring(response.text)
-                value = parse_xml_path(xml_root, path)
-            else:
-                print(f"[WARN] Unknown source_type '{source_type}' in API{api_num}")
+                if 'application/xml' in response.headers.get('Content-Type', '').lower():
+                    value = parse_xml_path(ET.fromstring(response.text), path)  # Parse value from XML
+                else:
+                    if logs is not None:
+                        logs.append(f"[WARN] Cannot extract XML from non-XML response for {var_name_from_template}.")
         except Exception as e:
-            print(f"[ERROR] Exception extracting '{var_name}' from API{api_num}: {e}")
-            value = ""
+            if logs is not None:
+                logs.append(f"[WARN] Failed to extract {var_name_from_template} from {source_type}:{path} - {e}")
+            continue  # Move to next extraction rule
 
-        scoped_var_name = f"api{api_num}.{var_name}"
-        variables[scoped_var_name] = value
-        print(f"[INFO] Extracted {scoped_var_name} = {value}")
+        # Prefix variable with api_key if not already prefixed
+        if not var_name_from_template.startswith(f"{api_key}."):
+            scoped_var_name = f"{api_key}.{var_name_from_template}"
+        else:
+            scoped_var_name = var_name_from_template
 
-def main():
-    # Number of APIs to call (adjust to your case)
-    api_count = 3
+        variables[scoped_var_name] = value  # Save value into shared variables
 
-    # Variables dict shared across all APIs, holds extracted variables keyed by "apiN.varName"
-    variables = {}
+        if logs is not None:
+            logs.append(f"[INFO] Extracted {scoped_var_name} = {value}")
 
-    # Optional: Store responses for later or logging
-    responses = []
+    if logs is not None:
+        logs.append(f"[INFO] Finished extracting variables for {api_key}")
 
-    # Loop through each API template file: api1.txt, api2.txt, ...
-    for i in range(1, api_count + 1):
-        filename = f"api{i}.txt"
-        if not os.path.isfile(filename):
-            print(f"[ERROR] Template file {filename} not found, stopping execution")
-            break
+# Root route that serves the main HTML page
+@app.route('/')
+def index():
+    return render_template('index.html')  # Return frontend template
 
-        print(f"\n[INFO] Processing API {i} from template {filename}")
+# Endpoint to get the API execution sequence from config file
+@app.route('/get_config', methods=['GET'])
+def get_config():
+    config_file = 'config.txt'  # Config filename
+    apis = []
+    try:
+        with open(os.path.join(API_TEMPLATES_DIR, config_file), 'r') as f:
+            apis = [line.strip() for line in f if line.strip()]  # Read all non-empty lines
+        return jsonify({"success": True, "sequence": apis})  # Return API list
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": f"Config file '{config_file}' not found."}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
-        # Read whole template text
-        template_text = read_template(filename)
+# Endpoint to get the parsed details of a single API template
+@app.route('/get_api_details', methods=['GET'])
+def get_api_details():
+    api_file = request.args.get('file')  # Get filename from query param
+    if not api_file:
+        return jsonify({"success": False, "error": "API file not specified."}), 400
 
-        # Extract URL, Headers, Body, Extraction instructions from template
+    file_path = os.path.join(API_TEMPLATES_DIR, api_file)
+    if not os.path.isfile(file_path):
+        return jsonify({"success": False, "error": f"API template file '{api_file}' not found."}), 404
+
+    try:
+        template_text = read_template(api_file)  # Read full template content
         url = extract_section(template_text, "#URL_START", "#URL_END")
         headers_text = extract_section(template_text, "#HEADER_START", "#HEADER_END")
         body_text = extract_section(template_text, "#BODY_START", "#BODY_END")
         extract_text = extract_section(template_text, "#EXTRACT_START", "#EXTRACT_END")
 
-        # Substitute variables in URL, headers, body
-        url = substitute_variables(url, variables)
-        headers_text = substitute_variables(headers_text, variables)
-        body_text = substitute_variables(body_text, variables)
+        return jsonify({
+            "success": True,
+            "details": {
+                "url": url,
+                "headers": headers_text,
+                "body": body_text,
+                "extract_rules": extract_text
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error reading API template: {str(e)}"}), 500
 
-        # Parse headers into dict
-        headers = parse_headers(headers_text)
+@app.route('/run', methods=['POST'])
+def run_apis():
+    logs = []  # Collect log messages for each step
+    overall_success = True  # Track whether all APIs in all iterations succeeded
 
-        # Determine HTTP method (you can extend to support GET if you want)
-        # For demo, assume POST if body present, else GET
-        method = "POST" if body_text else "GET"
+    try:
+        data = request.json  # Get JSON payload from POST request
+        iterations = int(data.get('iterations', 1))  # Number of times to repeat the API sequence (default = 1)
+        config_file = 'config.txt'  # Hardcoded config file name
+        apis = []
 
-        # Print request info for debug
-        print(f"[DEBUG] URL: {url}")
-        print(f"[DEBUG] Method: {method}")
-        print(f"[DEBUG] Headers: {headers}")
-        print(f"[DEBUG] Body: {body_text}")
-
-        # Prepare request arguments
-        req_args = {"headers": headers}
-        content_type = headers.get("Content-Type", "").lower()
-
-        # Prepare request body if POST
-        if method == "POST":
-            if "application/json" in content_type:
-                try:
-                    req_args["json"] = json.loads(body_text)
-                except json.JSONDecodeError as e:
-                    print(f"[ERROR] Invalid JSON body in API {i}: {e}")
-                    break
-            else:
-                # Send body as raw text for XML or others
-                req_args["data"] = body_text
-
-        # Make HTTP request safely
         try:
-            if method == "POST":
-                response = requests.post(url, **req_args)
-            else:
-                response = requests.get(url, **req_args)
-        except Exception as e:
-            print(f"[ERROR] Exception calling API {i}: {e}")
-            break
+            with open(os.path.join(API_TEMPLATES_DIR, config_file), 'r') as f:
+                apis = [line.strip() for line in f if line.strip()]  # Read list of API template filenames
+            logs.append(f"[INFO] Loaded config file '{config_file}' with APIs: {apis}")
+        except FileNotFoundError:
+            logs.append(f"[ERROR] Config file '{config_file}' not found.")
+            return jsonify({'success': False, 'error': 'config.txt not found', 'logs': logs})
 
-        # Check HTTP response code
-        if not (200 <= response.status_code < 300):
-            print(f"[ERROR] API {i} returned status {response.status_code}")
-            print(f"Response body:\n{response.text}")
-            break  # Stop further calls on failure
+        all_results = []  # Store responses from all API calls
+        variables = {}  # Shared dictionary of extracted variables across APIs and iterations
 
-        print(f"[INFO] API {i} call successful, status {response.status_code}")
+        for iter_num in range(1, iterations + 1):
+            logs.append(f"[INFO] Starting iteration {iter_num}")
 
-        # Extract variables from response
-        extract_variables(extract_text, response, i, variables)
+            for index, filename in enumerate(apis, start=1):
+                api_key = os.path.splitext(filename)[0]  # Use filename (without .txt) as the API key (e.g., api1)
 
-        # Store response for logging or file save (optional)
-        responses.append({
-            "api": i,
-            "url": url,
-            "status": response.status_code,
-            "headers": dict(response.headers),
-            "body": response.text,
+                logs.append(f"[INFO] Processing API {index} ({filename}) in iteration {iter_num}")
+
+                if not os.path.isfile(os.path.join(API_TEMPLATES_DIR, filename)):
+                    err_msg = f"Template file {filename} not found"
+                    logs.append(f"[ERROR] {err_msg}")
+                    overall_success = False
+                    # Log and continue instead of failing the entire run
+                    all_results.append({
+                        'api_file': filename,
+                        'iteration': iter_num,
+                        'status': 'N/A',
+                        'url': 'N/A',
+                        'method': 'N/A',
+                        'request_body': 'N/A',
+                        'headers': {},
+                        'body': err_msg
+                    })
+                    continue
+
+                # Load and parse template
+                template_text = read_template(filename)
+                url_template = extract_section(template_text, "#URL_START", "#URL_END")
+                headers_text_template = extract_section(template_text, "#HEADER_START", "#HEADER_END")
+                body_text_template = extract_section(template_text, "#BODY_START", "#BODY_END")
+                extract_text = extract_section(template_text, "#EXTRACT_START", "#EXTRACT_END")
+
+                # Replace placeholders with actual variable values
+                url = substitute_variables(url_template, variables)
+                headers_text = substitute_variables(headers_text_template, variables)
+                body_text = substitute_variables(body_text_template, variables)
+
+                headers = parse_headers(headers_text)
+                method = "POST" if body_text else "GET"  # Infer method based on presence of body
+
+                logs.append(f"[DEBUG] URL: {url}")
+                logs.append(f"[DEBUG] Method: {method}")
+                logs.append(f"[DEBUG] Headers: {headers}")
+                logs.append(f"[DEBUG] Body: {body_text}")
+
+                req_args = {"headers": headers,
+                            "timeout": 120  # Abort if server doesn't respond in 120 seconds
+                }  # Prepare base request args
+                
+                request_body_for_log = None  # Capture actual request body (for logging/debug)
+
+                if method == "POST":
+                    content_type = headers.get("Content-Type", "").lower()
+                    if "application/json" in content_type:
+                        try:
+                            req_args["json"] = json.loads(body_text)  # Try parsing JSON body
+                            request_body_for_log = req_args["json"]
+                        except json.JSONDecodeError as e:
+                            err_msg = f"Invalid JSON in {filename}: {e}"
+                            logs.append(f"[ERROR] {err_msg}")
+                            overall_success = False
+                            all_results.append({
+                                'api_file': filename,
+                                'iteration': iter_num,
+                                'status': 'JSON_ERROR',
+                                'url': url,
+                                'method': method,
+                                'request_body': body_text,
+                                'headers': headers,
+                                'body': err_msg
+                            })
+                            continue
+                    else:
+                        req_args["data"] = body_text  # Raw POST body (e.g., XML or form)
+                        request_body_for_log = body_text
+
+                try:
+                    # Make the actual request
+                    response = requests.post(url, **req_args) if method == "POST" else requests.get(url, **req_args)
+
+                    logs.append(f"[INFO] Response status code: {response.status_code}")
+
+                    if not (200 <= response.status_code < 300):
+                        err_msg = f"{filename} returned status {response.status_code}"
+                        logs.append(f"[ERROR] {err_msg}")
+                        logs.append(f"Response body:\n{response.text}")
+                        overall_success = False
+                    else:
+                        logs.append(f"[INFO] {filename} call successful.")
+
+                    # Run extraction even on error responses
+                    extract_variables(extract_text, response, api_key, variables, logs)
+
+                    all_results.append({
+                        'api_file': filename,
+                        'iteration': iter_num,
+                        'status': response.status_code,
+                        'url': url,
+                        'method': method,
+                        'request_body': request_body_for_log,
+                        'headers': dict(response.headers),
+                        'body': response.text
+                    })
+
+                except requests.exceptions.RequestException as e:
+                    err_msg = f"Network/Connection error calling {filename}: {str(e)}"
+                    logs.append(f"[ERROR] {err_msg}")
+                    overall_success = False
+                    all_results.append({
+                        'api_file': filename,
+                        'iteration': iter_num,
+                        'status': 'NETWORK_ERROR',
+                        'url': url,
+                        'method': method,
+                        'request_body': request_body_for_log,
+                        'headers': {},
+                        'body': err_msg
+                    })
+                except requests.exceptions.Timeout as e:
+                    err_msg = f"Timeout after 120 seconds calling {filename}"
+                    logs.append(f"[ERROR] {err_msg}")
+                    overall_success = False
+                    all_results.append({
+                        'api_file': filename,
+                        'iteration': iter_num,
+                        'status': 'TIMEOUT',
+                        'url': url,
+                        'method': method,
+                        'request_body': request_body_for_log,
+                        'headers': {},
+                        'body': err_msg
+                    })
+                except Exception as e:
+                    err_msg = f"Unexpected error during API call {filename}: {str(e)}"
+                    logs.append(f"[ERROR] {err_msg}")
+                    overall_success = False
+                    all_results.append({
+                        'api_file': filename,
+                        'iteration': iter_num,
+                        'status': 'UNKNOWN_ERROR',
+                        'url': url,
+                        'method': method,
+                        'request_body': request_body_for_log,
+                        'headers': {},
+                        'body': err_msg
+                    })
+
+                # Show variable state after each API call
+                logs.append(f"[DEBUG] Variables after processing {api_key}: {variables}")
+
+        logs.append("[INFO] All iterations completed.")
+        if not overall_success:
+            logs.append("[WARNING] Some API calls failed or encountered errors during execution.")
+
+        return jsonify({
+            'success': overall_success,
+            'responses': all_results,
+            'logs': logs,
+            'extracted_variables': variables
         })
 
-    # Optionally: print summary or save all responses
-    print("\n[INFO] All API calls completed. Extracted variables:")
-    for k, v in variables.items():
-        print(f"{k} = {v}")
+    except Exception as e:
+        logs.append(f"[ERROR] Unexpected error in run_apis function: {str(e)}")
+        return jsonify({'success': False, 'error': str(e), 'logs': logs})
 
-    # Optionally: Save responses to files
-    for resp in responses:
-        fname = f"api{resp['api']}_response.txt"
-        with open(fname, "w", encoding="utf-8") as f:
-            f.write(f"URL: {resp['url']}\n")
-            f.write(f"Status: {resp['status']}\n")
-            f.write(f"Headers:\n")
-            for hk, hv in resp['headers'].items():
-                f.write(f"{hk}: {hv}\n")
-            f.write("\nBody:\n")
-            f.write(resp['body'])
-        print(f"[INFO] Saved API {resp['api']} response to {fname}")
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
 
-if __name__ == "__main__":
-    main()
+
+=============
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multi-API Runner with Iterations & Accordion</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    /* Spinner styling */
+    #spinner { display: none; }
+    /* Styling for pre-formatted result boxes */
+    .result-box {
+      white-space: pre-wrap; /* Preserves whitespace and wraps text */
+      background: #f8f9fa; /* Light grey background */
+      padding: 10px; /* Internal spacing */
+      border-radius: 5px; /* Rounded corners */
+      font-family: monospace; /* Monospaced font for code/data */
+      border: 1px solid #e9ecef; /* Light border */
+      max-height: 200px; /* Max height for scrollable content */
+      overflow-y: auto; /* Enable vertical scrolling */
+    }
+    /* Custom styling for accordion headers to make them more distinct */
+    .accordion-button {
+        font-weight: bold;
+        color: #343a40; /* Darker text for better contrast */
+    }
+    .accordion-button:not(.collapsed) {
+        color: #0056b3; /* Blue when expanded */
+        background-color: #e7f1ff; /* Light blue background when expanded */
+    }
+    /* Custom style for the header banner */
+    .header-banner {
+        background-color: #800080; /* Purple background */
+        height: 80px;
+        display: flex; /* Use flexbox for alignment */
+        align-items: center; /* Vertically center content */
+        padding: 0 20px; /* Add some horizontal padding */
+        color: white; /* White text color */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
+    }
+    .header-banner img {
+        height: 60px; /* Adjust logo height as needed */
+        margin-right: 15px; /* Space between logo and text */
+    }
+    .header-banner h1 {
+        margin: 0; /* Remove default margin from h1 */
+        font-size: 1.8rem; /* Adjust font size */
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <!-- Header Banner -->
+  <div class="header-banner">
+    <img src="https://placehold.co/60x60/ffffff/800080?text=Logo" alt="Company Logo">
+    <h1>Performance Engineer Services</h1>
+  </div>
+
+  <div class="container py-4">
+    <div class="row">
+      <!-- Left main content area -->
+      <div class="col-md-8">
+
+        <h2 class="mb-4">Multi-API Test Runner</h2>
+
+        <!-- Section to display API sequence as a table on page load -->
+        <div class="mb-3">
+          <h5>APIs to Execute (Execution Sequence):</h5>
+          <table class="table table-striped table-bordered rounded-3 overflow-hidden shadow-sm">
+            <thead class="bg-primary text-white">
+              <tr>
+                <th scope="col" class="py-2 px-3">SL No.</th>
+                <th scope="col" class="py-2 px-3">Operation Name (File Name)</th>
+                <th scope="col" class="py-2 px-3">Details</th>
+              </tr>
+            </thead>
+            <tbody id="api-sequence-table-body">
+              <!-- API sequence will be loaded here dynamically by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Form for iterations input and API execution button -->
+        <form id="apiForm" class="mb-4 p-3 border rounded-3 shadow-sm bg-white">
+          <div class="row g-3 align-items-center">
+            <div class="col-auto">
+              <label for="iterations" class="col-form-label">Number of Iterations:</label>
+            </div>
+            <div class="col-auto">
+              <input type="number" id="iterations" name="iterations" class="form-control" min="1" value="1" max="10" required />
+            </div>
+            <div class="col-auto">
+              <button type="submit" class="btn btn-primary shadow-sm">Run APIs</button>
+            </div>
+            <div class="col-auto align-self-center" id="spinner">
+              <div class="spinner-border text-primary" role="status" style="width: 2rem; height: 2rem;">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Section for displaying execution results (logs, variables, responses) -->
+        <div id="results"> 
+          <h4 class="mt-4">Execution Logs</h4>
+          <textarea id="logOutput" class="form-control mb-3 rounded-3 shadow-sm" rows="8" readonly style="font-family: monospace; white-space: pre-wrap;"></textarea>
+
+          <h4>Extracted Variables</h4>
+          <textarea id="varsOutput" class="form-control mb-3 rounded-3 shadow-sm" rows="4" readonly style="font-family: monospace; white-space: pre-wrap;"></textarea>
+
+          <h4>API Responses</h4>
+          <div class="accordion shadow-sm" id="responsesAccordion"></div>
+        </div>
+      </div>
+
+      <!-- Right sidebar for instructions -->
+      <div class="col-md-4">
+        <div class="card shadow rounded-3">
+          <div class="card-header bg-secondary text-white rounded-top-3">How This Tool Works</div>
+          <div class="card-body" style="font-size: 0.9rem; line-height: 1.4;">
+            <p><strong>Configuration:</strong> The backend reads <code>config.txt</code> to know which API templates (<code>api1.txt</code>, <code>api2.txt</code>, etc.) to execute, and in what order.</p>
+            <p><strong>Templates:</strong> Each API template contains URL, headers, body, and extraction rules wrapped in markers (like <code>#URL_START</code> ... <code>#URL_END</code>).</p>
+            <p><strong>Execution:</strong> On clicking "Run APIs", the backend runs each API in the sequence, multiple iterations if specified, extracting variables and chaining calls.</p>
+            <p><strong>Results:</strong> Logs, extracted variables, and individual API responses per iteration appear below. Use the accordions to expand/collapse details.</p>
+            <p><strong>Spinner:</strong> Shows while the APIs are running to indicate progress.</p>
+            <p><strong>Modals:</strong> You get popup messages on success or if any error occurs.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap modal for general feedback (success/error messages) -->
+  <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content rounded-3 shadow-lg">
+        <div class="modal-header bg-info text-white rounded-top-3">
+          <h5 class="modal-title">Execution Status</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="modal-message"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Modal for API Details (request/response templates and iteration responses) -->
+  <div class="modal fade" id="apiDetailsModal" tabindex="-1" aria-labelledby="apiDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content rounded-3 shadow-lg">
+        <div class="modal-header bg-primary text-white rounded-top-3">
+          <h5 class="modal-title" id="apiDetailsModalLabel">API Details: <span id="apiFileNameInModal"></span></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="accordion" id="apiDetailsAccordion">
+            <!-- API request and response template details will be loaded here -->
+          </div>
+          <h5 class="mt-4">Response Iterations:</h5>
+          <div class="accordion" id="responseIterationsAccordion">
+            <!-- Iteration-specific responses will be loaded here -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Removed FLASK_BACKEND_URL constant. Using relative paths now.
+
+    // Global variable to store the responses from the last API run
+    let lastRunResponses = [];
+    // Global object to store iteration counts for each API
+    let apiIterationCounts = {}; // e.g., { 'api1.txt': { completed: 0, total: 0 }, 'api2.txt': { completed: 0, total: 0 } }
+    let apiSequenceOrder = []; // To maintain the order of APIs from config.txt
+
+    $(document).ready(function () {
+      // Function to show a Bootstrap modal message
+      function showFeedbackModal(message, isError = false) {
+          $('#modal-message').text(message);
+          const modalHeader = $('#feedbackModal .modal-header');
+          if (isError) {
+              modalHeader.removeClass('bg-info').addClass('bg-danger');
+          } else {
+              modalHeader.removeClass('bg-danger').addClass('bg-info');
+          }
+          new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+      }
+
+      // Function to update the API sequence table with current iteration counts
+      function updateApiSequenceTable() {
+          const tableBody = $('#api-sequence-table-body');
+          tableBody.empty(); // Clear existing content
+
+          if (apiSequenceOrder.length === 0) {
+              tableBody.append('<tr><td colspan="3" class="text-center text-muted">No API files configured in config.txt.</td></tr>');
+          } else {
+              apiSequenceOrder.forEach((apiFile, index) => {
+                const counts = apiIterationCounts[apiFile] || { completed: 0, total: 0 };
+                const counterDisplay = counts.total > 0 ? `${counts.completed}/${counts.total}` : '0/0';
+                tableBody.append(`
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${apiFile}</td>
+                    <td>
+                        <span class="badge bg-info text-dark me-2">${counterDisplay}</span>
+                        <a href="#" class="view-api-details btn btn-sm btn-outline-info rounded-pill" data-api-file="${apiFile}">View Details</a>
+                    </td>
+                  </tr>
+                `);
+              });
+          }
+      }
+
+      // Load API sequence from backend endpoint on page load
+      // Using relative URL: /get_config
+      $.get('/get_config', function (data) {
+        if (data.success) {
+          apiSequenceOrder = data.sequence || [];
+          // Initialize apiIterationCounts
+          apiSequenceOrder.forEach(apiFile => {
+              apiIterationCounts[apiFile] = { completed: 0, total: 0 };
+          });
+          updateApiSequenceTable(); // Initial render of the table
+        } else {
+            showFeedbackModal("Error loading API sequence: " + (data.error || "Unknown error"), true);
+        }
+      }).fail(function(jqXHR, textStatus, errorThrown) {
+          // Removed specific localhost:5000 reference from error message
+          showFeedbackModal("Failed to connect to backend for config: " + textStatus + ". Please ensure the Flask backend is running and accessible.", true);
+      });
+
+      // Handle click on "View Details" link in the API sequence table
+      $(document).on('click', '.view-api-details', function (e) {
+        e.preventDefault(); // Prevent default link behavior
+        const apiFile = $(this).data('api-file');
+        $('#apiFileNameInModal').text(apiFile); // Set the modal title
+
+        const apiDetailsAccordion = $('#apiDetailsAccordion');
+        apiDetailsAccordion.empty(); // Clear previous template details
+        const responseIterationsAccordion = $('#responseIterationsAccordion');
+        responseIterationsAccordion.empty(); // Clear previous response iterations
+
+        // Fetch API template details from the backend
+        // Using relative URL: /get_api_details
+        $.get(`/get_api_details?file=${apiFile}`, function(data) {
+            if (data.success && data.details) {
+                const details = data.details;
+                apiDetailsAccordion.append(`
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="requestHeader">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#requestCollapse" aria-expanded="true" aria-controls="requestCollapse">
+                                Request Template (URL, Headers, Body)
+                            </button>
+                        </h2>
+                        <div id="requestCollapse" class="accordion-collapse collapse show" aria-labelledby="requestHeader" data-bs-parent="#apiDetailsAccordion">
+                            <div class="accordion-body">
+                                <p><strong>URL:</strong></p>
+                                <pre class="result-box">${$('<div>').text(details.url).html()}</pre>
+                                <p><strong>Headers:</strong></p>
+                                <pre class="result-box">${$('<div>').text(details.headers).html()}</pre>
+                                <p><strong>Body:</strong></p>
+                                <pre class="result-box">${$('<div>').text(details.body).html()}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="extractRulesHeader">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#extractRulesCollapse" aria-expanded="false" aria-controls="extractRulesCollapse">
+                                Extraction Rules
+                            </button>
+                        </h2>
+                        <div id="extractRulesCollapse" class="accordion-collapse collapse" aria-labelledby="extractRulesHeader" data-bs-parent="#apiDetailsAccordion">
+                            <div class="accordion-body">
+                                <pre class="result-box">${$('<div>').text(details.extract_rules || 'No extraction rules defined.').html()}</pre>
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                // Filter lastRunResponses for the current apiFile
+                const filteredResponses = lastRunResponses.filter(resp => resp.api_file === apiFile);
+
+                if (filteredResponses.length > 0) {
+                    let iterationResponsesHtml = '';
+                    // Group filtered responses by iteration
+                    const responsesByIteration = {};
+                    filteredResponses.forEach(resp => {
+                        if (!responsesByIteration[resp.iteration]) {
+                            responsesByIteration[resp.iteration] = [];
+                        }
+                        responsesByIteration[resp.iteration].push(resp);
+                    });
+
+                    for (const iteration in responsesByIteration) {
+                        const iterationResponse = responsesByIteration[iteration][0]; // Assuming one response per API per iteration in this context
+                        const iterationHeadingId = `responseIterHeading${apiFile.replace(/\./g, '_')}_${iteration}`;
+                        const iterationCollapseId = `responseIterCollapse${apiFile.replace(/\./g, '_')}_${iteration}`;
+
+                        iterationResponsesHtml += `
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="${iterationHeadingId}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${iterationCollapseId}" aria-expanded="false" aria-controls="${iterationCollapseId}">
+                                        Response Iteration ${iteration} (Status: ${iterationResponse.status})
+                                    </button>
+                                </h2>
+                                <div id="${iterationCollapseId}" class="accordion-collapse collapse" aria-labelledby="${iterationHeadingId}" data-bs-parent="#responseIterationsAccordion">
+                                    <div class="accordion-body">
+                                        <p><strong>Response Headers:</strong></p>
+                                        <pre class="result-box">${JSON.stringify(iterationResponse.headers, null, 2)}</pre>
+                                        <p><strong>Response Body:</strong></p>
+                                        <pre class="result-box">${$('<div>').text(iterationResponse.body).html()}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    responseIterationsAccordion.html(iterationResponsesHtml);
+                } else {
+                    responseIterationsAccordion.html('<p class="text-muted mt-3">No execution responses found for this API in the last run.</p>');
+                }
+
+                new bootstrap.Modal(document.getElementById('apiDetailsModal')).show(); // Show the API details modal
+            } else {
+                showFeedbackModal("Error fetching API details: " + (data.error || "Unknown error"), true);
+            }
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            // Removed specific localhost:5000 reference from error message
+            showFeedbackModal("Failed to connect to backend for API details: " + textStatus + ". Please ensure the Flask backend is running and accessible.", true);
+        });
+      });
+
+
+      // Handle form submission for running APIs
+      $('#apiForm').on('submit', function (e) {
+        e.preventDefault(); // Prevent default form submission
+
+        const iterations = Math.max(1, parseInt($('#iterations').val()) || 1);
+
+        // Reset counts for the new run
+        apiSequenceOrder.forEach(apiFile => {
+            apiIterationCounts[apiFile].completed = 0;
+            apiIterationCounts[apiFile].total = iterations; // Set total iterations for all APIs
+        });
+        updateApiSequenceTable(); // Update table with reset counts
+
+        $('#spinner').show();
+        $('#logOutput').val('Running...'); // Initial message while processing
+        $('#varsOutput').val('');
+        $('#responsesAccordion').empty(); // Clear previous responses
+
+        // POST iterations to the /run endpoint
+        // Using relative URL: /run
+        $.ajax({
+          url: '/run',
+          method: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({ iterations }),
+          success: function (data) {
+            $('#spinner').hide(); // Hide spinner on success or error
+
+            // Always display logs first, regardless of data.success status
+            if (data.logs && Array.isArray(data.logs)) {
+                $('#logOutput').val(data.logs.join('\n'));
+            } else {
+                $('#logOutput').val('No logs received from backend or logs format is incorrect.');
+            }
+
+            if (!data.success) {
+              showFeedbackModal("Error: " + (data.error || "Unknown error"), true);
+              // Do not return here, so that variables and partial responses can still be displayed
+            } else {
+                showFeedbackModal("API execution completed successfully!");
+            }
+
+            // Store the responses globally for the "View Details" modal
+            lastRunResponses = data.responses || [];
+
+            // Update completed counts based on successful responses
+            apiSequenceOrder.forEach(apiFile => {
+                const successfulResponsesForApi = lastRunResponses.filter(resp => 
+                    resp.api_file === apiFile && resp.status >= 200 && resp.status < 300
+                );
+                apiIterationCounts[apiFile].completed = successfulResponsesForApi.length;
+            });
+            updateApiSequenceTable(); // Re-render table with updated counts
+
+            // Display extracted variables
+            const varsText = Object.entries(data.extracted_variables || {})
+              .map(([k, v]) => `${k} = ${v}`)
+              .join('\n');
+            $('#varsOutput').val(varsText);
+
+            // Build accordion for API responses per iteration (only if successful responses are present)
+            const responses = data.responses || []; 
+            if (responses.length > 0) {
+                let accordionHtml = '';
+
+                // Group responses by iteration
+                const responsesByIteration = {};
+                responses.forEach(resp => {
+                    if (!responsesByIteration[resp.iteration]) {
+                        responsesByIteration[resp.iteration] = [];
+                    }
+                    responsesByIteration[resp.iteration].push(resp);
+                });
+
+                // Iterate through each iteration to build the main accordions (Result Iteration X)
+                for (const iteration in responsesByIteration) {
+                    const iterationResponses = responsesByIteration[iteration];
+                    const iterationHeadingId = `resultIterationHeading${iteration}`;
+                    const iterationCollapseId = `resultIterationCollapse${iteration}`;
+
+                    accordionHtml += `
+                        <div class="accordion-item rounded-3 mb-2 shadow-sm">
+                            <h2 class="accordion-header" id="${iterationHeadingId}">
+                                <button class="accordion-button collapsed rounded-3" type="button" data-bs-toggle="collapse" data-bs-target="#${iterationCollapseId}" aria-expanded="false" aria-controls="${iterationCollapseId}">
+                                    Result Iteration ${iteration}
+                                </button>
+                            </h2>
+                            <div id="${iterationCollapseId}" class="accordion-collapse collapse" aria-labelledby="${iterationHeadingId}" data-bs-parent="#responsesAccordion">
+                                <div class="accordion-body">
+                    `;
+
+                    // Now, instead of nested accordions, display each API's response directly
+                    iterationResponses.forEach((resp, apiIdx) => {
+                        accordionHtml += `
+                                    <h5 class="mt-3">API: ${resp.api_file} (Status: ${resp.status})</h5>
+                                    <p><strong>URL:</strong> <pre class="result-box">${$('<div>').text(resp.url).html()}</pre></p>
+                                    <p><strong>Method:</strong> <span class="badge bg-secondary">${resp.method}</span></p>
+                                    <p><strong>Request Headers:</strong></p>
+                                    <pre class="result-box">${JSON.stringify(resp.headers, null, 2)}</pre>
+                                    <p><strong>Request Body:</strong></p>
+                                    <pre class="result-box">${$('<div>').text(JSON.stringify(resp.request_body, null, 2)).html()}</pre>
+                                    <p><strong>Response Body:</strong></p>
+                                    <pre class="result-box">${$('<div>').text(resp.body).html()}</pre>
+                                    ${apiIdx < iterationResponses.length - 1 ? '<hr class="my-4">' : ''} <!-- Add a separator if not the last API in iteration -->
+                        `;
+                    });
+                    accordionHtml += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                $('#responsesAccordion').html(accordionHtml); // Insert generated HTML into the accordion container
+            } else {
+                $('#responsesAccordion').empty(); // Clear previous if no responses this run
+            }
+          },
+          error: function (xhr, status, error) {
+            $('#spinner').hide(); // Hide spinner on error
+            
+            let errorMessage = "Execution failed due to a network error or unexpected backend response: " + error + ". Check browser console for details.";
+            
+            // Attempt to get logs from the error response JSON
+            if (xhr.responseJSON && xhr.responseJSON.logs && Array.isArray(xhr.responseJSON.logs)) {
+                $('#logOutput').val(xhr.responseJSON.logs.join('\n'));
+                errorMessage += "\nSee logs above for more details from the backend.";
+            } else {
+                $('#logOutput').val('Network error. No detailed backend logs received in the error response.');
+            }
+            
+            showFeedbackModal(errorMessage, true);
+            $('#varsOutput').val(''); // Clear variables on network error
+            $('#responsesAccordion').empty(); // Clear responses on network error
+            lastRunResponses = []; // Clear stored responses on error
+            
+            // On error, reset counts to 0/0
+            apiSequenceOrder.forEach(apiFile => {
+                apiIterationCounts[apiFile].completed = 0;
+                apiIterationCounts[apiFile].total = 0;
+            });
+            updateApiSequenceTable(); // Update table with reset counts
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
+
+
+
+=====================
+
+
+from flask import Flask, request, jsonify, make_response
+import xml.etree.ElementTree as ET
+
+app = Flask(__name__)
+
+# API 1 - Login and Token Provider
+@app.route('/api1', methods=['POST'])
+def api1():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    if username == "demo_user" and password == "pass123":
+        response = jsonify({
+            "status": "success",
+            "token": "ABC123XYZ"
+        })
+        response.headers['amazonXID'] = "AMAZON-999"
+        response.headers['xID'] = "XID-777"
+        return response
+    else:
+        return make_response(jsonify({"error": "Invalid credentials"}), 403)
+
+# API 2 - Accepts token and returns account info
+@app.route('/api2', methods=['POST'])
+def api2():
+    headers = request.headers
+    token = headers.get("token")
+
+    if token != "ABC123XYZ":
+        return make_response(jsonify({"error": "Invalid token"}), 401)
+
+    json_body = request.get_json()
+    message = json_body.get("info")
+
+    return jsonify({
+        "message": f"Hello from API 2! You said: {message}",
+        "AccountID": "ACCT-456"
+    })
+
+# API 3 - Accepts XML and returns XML response
+@app.route('/api3', methods=['POST'])
+def api3():
+    headers = request.headers
+    amazonXID = headers.get("amazonXID")
+    content_type = headers.get("Content-Type", "")
+
+    if "xml" not in content_type.lower():
+        return make_response("Unsupported Content-Type", 400)
+
+    try:
+        root = ET.fromstring(request.data)
+        account_id = root.findtext("AccountID")
+        message = root.findtext("Message")
+
+        response_xml = ET.Element("Response")
+        ET.SubElement(response_xml, "Status").text = "OK"
+        ET.SubElement(response_xml, "AccountReceived").text = account_id
+        ET.SubElement(response_xml, "EchoMessage").text = message
+        ET.SubElement(response_xml, "AmazonXIDReceived").text = amazonXID
+
+        xml_bytes = ET.tostring(response_xml, encoding="utf-8")
+        import random
+        status_code = random.choice([200,201,400])
+        response = make_response(xml_bytes, status_code)
+        response.headers["Content-Type"] = "application/xml"
+        return response
+    except Exception as e:
+        return make_response(str(e), 400)
+
+if __name__ == '__main__':
+    app.run(port=5001, debug=True)
